@@ -9,8 +9,77 @@ using System.Threading.Tasks;
 
 namespace OmenSuperHub {
   internal class OmenHardware {
+    public enum OmenGfxMode : byte {
+      Hybrid = 0x00,
+      Discrete = 0x01,
+      Optimus = 0x02,
+      Unknown = 0xFF
+    }
+
+    public enum OmenBacklightState : byte {
+      Unknown = 0x00,
+      Off = 0x64,
+      On = 0xE4
+    }
+
+    public enum OmenKeyboardType : byte {
+      Standard = 0x00,
+      WithNumpad = 0x01,
+      Tenkeyless = 0x02,
+      PerKeyRgb = 0x03,
+      Unknown = 0xFF
+    }
+
+    public enum OmenSmartAdapterStatus : ushort {
+      NoSupport = 0x0000,
+      MeetsRequirement = 0x0001,
+      BelowRequirement = 0x0002,
+      BatteryPower = 0x0003,
+      NotFunctioning = 0x0004,
+      Unknown = 0xFFFF
+    }
+
+    public sealed class OmenGpuStatus {
+      public bool CustomTgpEnabled { get; set; }
+      public bool PpabEnabled { get; set; }
+      public byte DState { get; set; }
+      public byte ThermalThreshold { get; set; }
+      public byte[] RawData { get; set; }
+    }
+
+    public sealed class OmenFanTypeInfo {
+      public byte RawValue { get; set; }
+      public int Fan1Type { get; set; }
+      public int Fan2Type { get; set; }
+    }
+
+    public sealed class OmenColorTable {
+      public byte ZoneCount { get; set; }
+      public byte[] RawData { get; set; }
+    }
+
+    public sealed class OmenSystemDesignData {
+      public ushort PowerFlags { get; set; }
+      public byte ThermalPolicyVersion { get; set; }
+      public byte FeatureFlags { get; set; }
+      public byte DefaultPl4 { get; set; }
+      public byte BiosOverclockingSupport { get; set; }
+      public byte MiscFlags { get; set; }
+      public byte DefaultConcurrentTdp { get; set; }
+      public bool SoftwareFanControlSupported { get; set; }
+      public bool ExtremeModeSupported { get; set; }
+      public bool ExtremeModeUnlocked { get; set; }
+      public bool GraphicsSwitcherSupported { get; set; }
+      public byte[] RawData { get; set; }
+    }
+
     public static void GetFanCount() {
       SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+    }
+
+    public static int QueryFanCount() {
+      byte[] fanCount = SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+      return fanCount != null && fanCount.Length > 0 ? fanCount[0] : 0;
     }
 
     public static List<int> GetFanLevel() {
@@ -28,6 +97,75 @@ namespace OmenSuperHub {
     public static byte[] GetFanTable() {
       // 0x19-0x34?
       return SendOmenBiosWmi(0x2F, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 128);
+    }
+
+    public static OmenFanTypeInfo GetFanTypeInfo() {
+      byte[] data = SendOmenBiosWmi(0x2C, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 128);
+      if (data == null || data.Length == 0)
+        return null;
+
+      return new OmenFanTypeInfo {
+        RawValue = data[0],
+        Fan1Type = data[0] & 0x0F,
+        Fan2Type = (data[0] >> 4) & 0x0F
+      };
+    }
+
+    public static OmenGfxMode GetGraphicsMode() {
+      byte[] data = SendOmenBiosWmi(0x52, null, 4, 0x01);
+      if (data == null || data.Length == 0)
+        return OmenGfxMode.Unknown;
+
+      switch (data[0]) {
+        case 0x00:
+          return OmenGfxMode.Hybrid;
+        case 0x01:
+          return OmenGfxMode.Discrete;
+        case 0x02:
+          return OmenGfxMode.Optimus;
+        default:
+          return OmenGfxMode.Unknown;
+      }
+    }
+
+    public static OmenGpuStatus GetGpuStatus() {
+      byte[] data = SendOmenBiosWmi(0x21, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+      if (data == null || data.Length < 4)
+        return null;
+
+      return new OmenGpuStatus {
+        CustomTgpEnabled = data[0] != 0,
+        PpabEnabled = data[1] != 0,
+        DState = data[2],
+        ThermalThreshold = data[3],
+        RawData = data
+      };
+    }
+
+    public static byte GetTemperatureSensorValue() {
+      byte[] data = SendOmenBiosWmi(0x23, new byte[] { 0x01, 0x00, 0x00, 0x00 }, 4);
+      return data != null && data.Length > 0 ? data[0] : (byte)0;
+    }
+
+    public static OmenSystemDesignData GetSystemDesignData() {
+      byte[] data = SendOmenBiosWmi(0x28, null, 128);
+      if (data == null || data.Length < 9)
+        return null;
+
+      return new OmenSystemDesignData {
+        PowerFlags = (ushort)(data[0] | (data[1] << 8)),
+        ThermalPolicyVersion = data[2],
+        FeatureFlags = data[4],
+        DefaultPl4 = data[5],
+        BiosOverclockingSupport = data[6],
+        MiscFlags = data[7],
+        DefaultConcurrentTdp = data[8],
+        SoftwareFanControlSupported = (data[4] & 0x01) != 0,
+        ExtremeModeSupported = (data[4] & 0x02) != 0,
+        ExtremeModeUnlocked = (data[4] & 0x04) != 0,
+        GraphicsSwitcherSupported = (data[7] & 0x08) != 0,
+        RawData = data
+      };
     }
 
     public static void SetFanLevel(int fanSpeed1, int fanSpeed2) {
@@ -84,6 +222,41 @@ namespace OmenSuperHub {
       SendOmenBiosWmi(0x05, new byte[] { 0x64 }, 0, 0x20009);
     }
 
+    public static bool HasBacklightSupport() {
+      byte[] data = SendOmenBiosWmi(0x01, new byte[] { 0x00 }, 4, 0x20009);
+      return data != null && data.Length > 0 && (data[0] & 0x01) != 0;
+    }
+
+    public static OmenBacklightState GetBacklightState() {
+      byte[] data = SendOmenBiosWmi(0x04, new byte[] { 0x00 }, 128, 0x20009);
+      if (data == null || data.Length == 0)
+        return OmenBacklightState.Unknown;
+
+      if (data[0] == (byte)OmenBacklightState.Off)
+        return OmenBacklightState.Off;
+      if (data[0] == (byte)OmenBacklightState.On)
+        return OmenBacklightState.On;
+      return OmenBacklightState.Unknown;
+    }
+
+    public static OmenColorTable GetColorTable() {
+      byte[] data = SendOmenBiosWmi(0x02, new byte[] { 0x00 }, 128, 0x20009);
+      if (data == null || data.Length == 0)
+        return null;
+
+      return new OmenColorTable {
+        ZoneCount = data[0],
+        RawData = data
+      };
+    }
+
+    public static void SetColorTable(byte[] colorTable) {
+      if (colorTable == null || colorTable.Length == 0)
+        throw new ArgumentException("Color table cannot be empty.", nameof(colorTable));
+
+      SendOmenBiosWmi(0x03, colorTable, 0, 0x20009);
+    }
+
     public static void SetlightColor() {
       byte[] dataIn = new byte[128];
       dataIn[0] = 0x03;
@@ -109,6 +282,79 @@ namespace OmenSuperHub {
     //  string outputData = SendOmenBiosWmi(0x37, dataIn, 4);
     //  Console.WriteLine("+ OK: " + outputData);
     //}
+
+    public static string GetBornOnDate() {
+      byte[] data = SendOmenBiosWmi(0x10, null, 128, 0x01);
+      if (data == null || data.Length < 8)
+        return null;
+
+      string date = Encoding.ASCII.GetString(data, 0, 8);
+      return date.TrimEnd('\0');
+    }
+
+    public static OmenKeyboardType GetKeyboardType() {
+      byte[] data = SendOmenBiosWmi(0x2B, new byte[] { 0x00 }, 4);
+      if (data == null || data.Length == 0)
+        return OmenKeyboardType.Unknown;
+
+      switch (data[0]) {
+        case 0x00:
+          return OmenKeyboardType.Standard;
+        case 0x01:
+          return OmenKeyboardType.WithNumpad;
+        case 0x02:
+          return OmenKeyboardType.Tenkeyless;
+        case 0x03:
+          return OmenKeyboardType.PerKeyRgb;
+        default:
+          return OmenKeyboardType.Unknown;
+      }
+    }
+
+    public static bool IsMaxFanSpeedEnabled() {
+      byte[] data = SendOmenBiosWmi(0x26, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+      return data != null && data.Length > 0 && data[0] != 0;
+    }
+
+    public static bool HasMemoryOverclockingSupport() {
+      byte[] data = SendOmenBiosWmi(0x18, new byte[] { 0x00 }, 128);
+      return data != null && data.Length > 2 && data[2] != 0;
+    }
+
+    public static bool HasBiosOverclockingSupport() {
+      byte[] data = SendOmenBiosWmi(0x35, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 128);
+      return data != null && data.Length > 2 && data[2] != 0;
+    }
+
+    public static OmenSmartAdapterStatus GetSmartAdapterStatus() {
+      byte[] data = SendOmenBiosWmi(0x0F, null, 4, 0x01);
+      if (data == null || data.Length < 2)
+        return OmenSmartAdapterStatus.Unknown;
+
+      ushort value = (ushort)(data[0] | (data[1] << 8));
+      switch (value) {
+        case 0x0000:
+          return OmenSmartAdapterStatus.NoSupport;
+        case 0x0001:
+          return OmenSmartAdapterStatus.MeetsRequirement;
+        case 0x0002:
+          return OmenSmartAdapterStatus.BelowRequirement;
+        case 0x0003:
+          return OmenSmartAdapterStatus.BatteryPower;
+        case 0x0004:
+          return OmenSmartAdapterStatus.NotFunctioning;
+        default:
+          return OmenSmartAdapterStatus.Unknown;
+      }
+    }
+
+    public static bool? GetIdleModeEnabled() {
+      byte[] data = SendOmenBiosWmi(0x31, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+      if (data == null || data.Length == 0)
+        return null;
+
+      return data[0] != 0;
+    }
 
     public static ManagementObjectSearcher searcher;
     public static ManagementObject biosMethods;

@@ -12,6 +12,7 @@ using Microsoft.Win32;
 using System.Text.RegularExpressions;
 using System.Drawing;
 using System.Threading.Tasks;
+using TaskEx = System.Threading.Tasks.Task;
 //using OpenComputer = OpenHardwareMonitor.Hardware.Computer;
 //using OpenIHardware = OpenHardwareMonitor.Hardware.IHardware;
 //using OpenHardwareType = OpenHardwareMonitor.Hardware.HardwareType;
@@ -54,7 +55,7 @@ namespace OmenSuperHub {
     static NotifyIcon trayIcon;
     static FloatingForm floatingForm;
     static NamedPipeServerStream omenKeyPipeServer;
-    static Task omenKeyListenerTask;
+    static TaskEx omenKeyListenerTask;
     static int shutdownStarted = 0;
     static volatile bool checkFloating = false;
     static volatile bool isShuttingDown = false;
@@ -271,7 +272,7 @@ namespace OmenSuperHub {
     static void AutoStartDisable() {
       using (TaskService ts = new TaskService()) {
         // 检查任务是否存在
-        Task existingTask = ts.FindTask("OmenSuperHub");
+        Microsoft.Win32.TaskScheduler.Task existingTask = ts.FindTask("OmenSuperHub");
 
         if (existingTask != null) {
           // 删除任务
@@ -1837,7 +1838,7 @@ namespace OmenSuperHub {
     }
 
     static void getOmenKeyTask() {
-      omenKeyListenerTask = Task.Run(() => {
+      omenKeyListenerTask = TaskEx.Run(() => {
         while (!isShuttingDown) {
           try {
             using (var pipeServer = new NamedPipeServerStream("OmenSuperHubPipe", PipeDirection.In)) {

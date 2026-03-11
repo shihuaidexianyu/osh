@@ -80,6 +80,12 @@ namespace OmenSuperHub {
           return Color.FromArgb(0, 128, 192);
         case "Fan":
           return Color.FromArgb(0, 128, 64);
+        case "Battery":
+          return Color.FromArgb(192, 96, 0);
+        case "State":
+          return Color.FromArgb(128, 64, 0);
+        case "Feat":
+          return Color.FromArgb(96, 64, 128);
         default:
           return Color.Black; // 默认颜色
       }

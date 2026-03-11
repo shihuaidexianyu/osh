@@ -35,6 +35,12 @@ namespace OmenSuperHub {
     static float GPUTemp = 40;
     static float CPUPower = 0;
     static float GPUPower = 0;
+    static OmenGfxMode currentGfxMode = OmenGfxMode.Unknown;
+    static OmenGpuStatus currentGpuStatus;
+    static OmenSystemDesignData currentSystemDesignData;
+    static OmenSmartAdapterStatus currentSmartAdapterStatus = OmenSmartAdapterStatus.Unknown;
+    static OmenFanTypeInfo currentFanTypeInfo;
+    static OmenKeyboardType currentKeyboardType = OmenKeyboardType.Unknown;
     static int DBVersion = 2, countDB = 0, countDBInit = 5, tryTimes = 0, CPULimitDB = 25;
     static int textSize = 48;
     static int countRestore = 0, gpuClock = 0;
@@ -57,6 +63,7 @@ namespace OmenSuperHub {
     static NamedPipeServerStream omenKeyPipeServer;
     static TaskEx omenKeyListenerTask;
     static int shutdownStarted = 0;
+    static int advancedStatusTick = 0;
     static volatile bool checkFloating = false;
     static volatile bool isShuttingDown = false;
 
@@ -1114,7 +1121,7 @@ namespace OmenSuperHub {
       QueryHarware();
       if (monitorFan)
         fanSpeedNow = GetFanLevel();
-      trayIcon.Text = monitorText();
+      trayIcon.Text = traySummaryText();
       // Console.WriteLine("UpdateTooltip");
 
       UpdateFloatingText();
@@ -1260,6 +1267,13 @@ namespace OmenSuperHub {
       } else
         CPUPower = openPowerCPU;
 
+      if (advancedStatusTick <= 0) {
+        RefreshAdvancedHardwareStatus();
+        advancedStatusTick = 4;
+      } else {
+        advancedStatusTick--;
+      }
+
       //通过countQuery延时来确保温度正常读取
       if (countQuery <= 5 && monitorGPU)
         countQuery++;
@@ -1389,6 +1403,112 @@ namespace OmenSuperHub {
             $"{kvp.Key:F0},{kvp.Value[0]},{kvp.Value[1]},{kvp.Key - 10.0:F0},{kvp.Value[0]},{kvp.Value[1]}"));
       }
       File.WriteAllLines(filePath, lines);
+    }
+
+    static void RefreshAdvancedHardwareStatus() {
+      try {
+        currentGfxMode = GetGraphicsMode();
+      } catch {
+      }
+
+      try {
+        var gpuStatus = GetGpuStatus();
+        if (gpuStatus != null)
+          currentGpuStatus = gpuStatus;
+      } catch {
+      }
+
+      try {
+        var designData = GetSystemDesignData();
+        if (designData != null)
+          currentSystemDesignData = designData;
+      } catch {
+      }
+
+      try {
+        currentSmartAdapterStatus = GetSmartAdapterStatus();
+      } catch {
+      }
+
+      try {
+        var fanTypeInfo = GetFanTypeInfo();
+        if (fanTypeInfo != null)
+          currentFanTypeInfo = fanTypeInfo;
+      } catch {
+      }
+
+      try {
+        currentKeyboardType = GetKeyboardType();
+      } catch {
+      }
+    }
+
+    static string FormatGfxMode(OmenGfxMode mode) {
+      switch (mode) {
+        case OmenGfxMode.Hybrid:
+          return "Hybrid";
+        case OmenGfxMode.Discrete:
+          return "Discrete";
+        case OmenGfxMode.Optimus:
+          return "Optimus";
+        default:
+          return "Unknown";
+      }
+    }
+
+    static string FormatGpuControl(OmenGpuStatus status) {
+      if (status == null)
+        return "Unknown";
+
+      string powerMode;
+      if (status.CustomTgpEnabled && status.PpabEnabled)
+        powerMode = "cTGP+PPAB";
+      else if (status.CustomTgpEnabled)
+        powerMode = "cTGP";
+      else
+        powerMode = "BaseTGP";
+
+      return $"{powerMode} D{status.DState}";
+    }
+
+    static string FormatAdapterStatus(OmenSmartAdapterStatus status) {
+      switch (status) {
+        case OmenSmartAdapterStatus.MeetsRequirement:
+          return "OK";
+        case OmenSmartAdapterStatus.BatteryPower:
+          return "Battery";
+        case OmenSmartAdapterStatus.BelowRequirement:
+          return "Low";
+        case OmenSmartAdapterStatus.NotFunctioning:
+          return "Fault";
+        case OmenSmartAdapterStatus.NoSupport:
+          return "N/A";
+        default:
+          return "?";
+      }
+    }
+
+    static string FormatFanTypes(OmenFanTypeInfo fanTypeInfo) {
+      if (fanTypeInfo == null)
+        return null;
+
+      return $"{fanTypeInfo.Fan1Type}/{fanTypeInfo.Fan2Type}";
+    }
+
+    static string traySummaryText() {
+      List<string> parts = new List<string>();
+      parts.Add($"CPU {CPUTemp:F0}C {CPUPower:F0}W");
+
+      if (monitorGPU)
+        parts.Add($"GPU {GPUTemp:F0}C {GPUPower:F0}W");
+
+      if (currentGfxMode != OmenGfxMode.Unknown)
+        parts.Add(FormatGfxMode(currentGfxMode));
+
+      string text = string.Join(" | ", parts);
+      if (text.Length > 63)
+        text = text.Substring(0, 63);
+      return text;
     }
 
     static void LoadFanConfig(string filePath) {
@@ -1903,12 +2023,41 @@ namespace OmenSuperHub {
 
     //生成监控信息
     static string monitorText() {
-      string str = $"CPU: {CPUTemp:F1}°C, {CPUPower:F1}W";
+      List<string> lines = new List<string>();
+      lines.Add($"CPU: {CPUTemp:F1}°C, {CPUPower:F1}W");
+
       if (monitorGPU)
-        str += $"\nGPU: {GPUTemp:F1}°C, {GPUPower:F1}W";
+        lines.Add($"GPU: {GPUTemp:F1}°C, {GPUPower:F1}W");
+
       if (monitorFan)
-        str += $"\nFan:  {fanSpeedNow[0] * 100}, {fanSpeedNow[1] * 100}";
-      return str;
+        lines.Add($"Fan:  {fanSpeedNow[0] * 100}, {fanSpeedNow[1] * 100}");
+
+      List<string> stateParts = new List<string>();
+      if (currentGfxMode != OmenGfxMode.Unknown)
+        stateParts.Add($"MUX {FormatGfxMode(currentGfxMode)}");
+      if (currentGpuStatus != null)
+        stateParts.Add($"GPUCtl {FormatGpuControl(currentGpuStatus)}");
+      if (currentSmartAdapterStatus != OmenSmartAdapterStatus.Unknown)
+        stateParts.Add($"AC {FormatAdapterStatus(currentSmartAdapterStatus)}");
+      if (stateParts.Count > 0)
+        lines.Add("State: " + string.Join(" | ", stateParts));
+
+      if (currentSystemDesignData != null) {
+        List<string> featureParts = new List<string>();
+        if (currentSystemDesignData.GraphicsSwitcherSupported)
+          featureParts.Add("GfxSwitch");
+        if (currentSystemDesignData.SoftwareFanControlSupported)
+          featureParts.Add("SWFan");
+        featureParts.Add($"PL4 {currentSystemDesignData.DefaultPl4}W");
+        string fanTypes = FormatFanTypes(currentFanTypeInfo);
+        if (!string.IsNullOrEmpty(fanTypes))
+          featureParts.Add($"FanType {fanTypes}");
+        if (currentKeyboardType != OmenKeyboardType.Unknown)
+          featureParts.Add($"Kbd {(byte)currentKeyboardType:X2}");
+        lines.Add("Feat:  " + string.Join(" | ", featureParts));
+      }
+
+      return string.Join("\n", lines);
     }
 
     static void Exit() {

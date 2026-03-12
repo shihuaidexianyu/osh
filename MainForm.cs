@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -19,14 +20,15 @@ namespace OmenSuperHub {
       }
     }
 
-    readonly SolidColorBrush pageBack = new SolidColorBrush(Color.FromRgb(243, 243, 243));
+    readonly SolidColorBrush pageBack = new SolidColorBrush(Color.FromRgb(245, 246, 248));
     readonly SolidColorBrush cardBack = new SolidColorBrush(Color.FromRgb(255, 255, 255));
-    readonly SolidColorBrush borderColor = new SolidColorBrush(Color.FromRgb(220, 223, 228));
-    readonly SolidColorBrush strongText = new SolidColorBrush(Color.FromRgb(31, 33, 36));
-    readonly SolidColorBrush mutedText = new SolidColorBrush(Color.FromRgb(95, 102, 112));
-    readonly SolidColorBrush accentOrange = new SolidColorBrush(Color.FromRgb(218, 125, 0));
-    readonly SolidColorBrush accentBlue = new SolidColorBrush(Color.FromRgb(0, 120, 212));
-    readonly SolidColorBrush accentGreen = new SolidColorBrush(Color.FromRgb(5, 133, 90));
+    readonly SolidColorBrush borderColor = new SolidColorBrush(Color.FromRgb(229, 232, 238));
+    readonly SolidColorBrush subtleFill = new SolidColorBrush(Color.FromRgb(248, 249, 251));
+    readonly SolidColorBrush strongText = new SolidColorBrush(Color.FromRgb(29, 33, 40));
+    readonly SolidColorBrush mutedText = new SolidColorBrush(Color.FromRgb(100, 108, 120));
+    readonly SolidColorBrush accentOrange = new SolidColorBrush(Color.FromRgb(189, 108, 0));
+    readonly SolidColorBrush accentBlue = new SolidColorBrush(Color.FromRgb(0, 103, 192));
+    readonly SolidColorBrush accentGreen = new SolidColorBrush(Color.FromRgb(11, 106, 69));
 
     readonly string[] fanModeItems = { "平衡", "狂暴" };
     readonly string[] fanControlItems = { "自动", "最大风扇", "1600 RPM", "2000 RPM", "2400 RPM", "2800 RPM", "3200 RPM", "3600 RPM" };
@@ -65,8 +67,10 @@ namespace OmenSuperHub {
     ComboBox gpuClockComboBox;
     Button floatingBarButton;
 
+    TabControl detailsTabControl;
     TextBox telemetryTextBox;
     TextBox configTextBox;
+    TextBox helpTextBox;
 
     MainForm() {
       EnsureWindow();
@@ -120,6 +124,18 @@ namespace OmenSuperHub {
       window.Activate();
     }
 
+    public void ShowHelpSection() {
+      EnsureWindow();
+      if (!window.IsVisible) {
+        window.Show();
+      }
+      if (detailsTabControl != null && detailsTabControl.Items.Count >= 3) {
+        detailsTabControl.SelectedIndex = 2;
+      }
+      window.Visibility = Visibility.Visible;
+      window.Activate();
+    }
+
     void EnsureWindow() {
       if (window != null) {
         return;
@@ -138,7 +154,9 @@ namespace OmenSuperHub {
         MinWidth = 1080,
         MinHeight = 760,
         WindowStartupLocation = WindowStartupLocation.CenterScreen,
-        Background = pageBack
+        Background = pageBack,
+        FontFamily = new FontFamily("Segoe UI"),
+        FontSize = 14
       };
 
       BuildLayout();
@@ -162,16 +180,16 @@ namespace OmenSuperHub {
 
     void BuildLayout() {
       var root = new Grid {
-        Margin = new Thickness(16, 14, 16, 14),
+        Margin = new Thickness(22, 18, 22, 18),
         Background = pageBack
       };
-      root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) });
+      root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
       root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
       var leftScroll = new ScrollViewer {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        Margin = new Thickness(0, 0, 12, 0),
+        Margin = new Thickness(0, 0, 16, 0),
         Background = Brushes.Transparent
       };
       var leftStack = new StackPanel();
@@ -208,9 +226,9 @@ namespace OmenSuperHub {
         Background = cardBack,
         BorderBrush = borderColor,
         BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(8),
-        Padding = new Thickness(16),
-        Margin = new Thickness(0, 0, 0, 12),
+        CornerRadius = new CornerRadius(10),
+        Padding = new Thickness(20),
+        Margin = new Thickness(0, 0, 0, 14),
         MinHeight = minHeight
       };
     }
@@ -219,9 +237,18 @@ namespace OmenSuperHub {
       return new TextBlock {
         Text = text,
         Foreground = strongText,
-        FontSize = 18,
+        FontSize = 20,
         FontWeight = FontWeights.SemiBold,
-        Margin = new Thickness(0, 0, 0, 10)
+        Margin = new Thickness(0, 0, 0, 4)
+      };
+    }
+
+    TextBlock CreateSectionSubtitle(string text) {
+      return new TextBlock {
+        Text = text,
+        Foreground = mutedText,
+        FontSize = 13,
+        Margin = new Thickness(0, 0, 0, 12)
       };
     }
 
@@ -242,7 +269,7 @@ namespace OmenSuperHub {
       stack.Children.Add(new TextBlock {
         Text = "OmenSuperHub",
         Foreground = strongText,
-        FontSize = 26,
+        FontSize = 28,
         FontWeight = FontWeights.Bold
       });
       stack.Children.Add(new TextBlock {
@@ -258,6 +285,7 @@ namespace OmenSuperHub {
       var card = CreateCard(240);
       var stack = new StackPanel();
       stack.Children.Add(CreateSectionTitle("当前状态"));
+      stack.Children.Add(CreateSectionSubtitle("核心温度、功率和风扇运行状态"));
 
       leftCpuText = CreateValueLabel("CPU --");
       leftGpuText = CreateValueLabel("GPU --");
@@ -278,6 +306,7 @@ namespace OmenSuperHub {
       var card = CreateCard(210);
       var stack = new StackPanel();
       stack.Children.Add(CreateSectionTitle("设置分类"));
+      stack.Children.Add(CreateSectionSubtitle("主页面按功能分组布局"));
       stack.Children.Add(CreateNavTag("散热与风扇"));
       stack.Children.Add(CreateNavTag("功耗与性能"));
       stack.Children.Add(CreateNavTag("浮窗与显示"));
@@ -307,7 +336,7 @@ namespace OmenSuperHub {
       left.Children.Add(new TextBlock {
         Text = "设置",
         Foreground = strongText,
-        FontSize = 34,
+        FontSize = 36,
         FontWeight = FontWeights.Bold
       });
       totalPowerText = new TextBlock {
@@ -319,7 +348,7 @@ namespace OmenSuperHub {
       lastUpdateText = new TextBlock {
         Text = "最近刷新: --",
         Foreground = mutedText,
-        FontSize = 14
+        FontSize = 13
       };
       left.Children.Add(totalPowerText);
       left.Children.Add(lastUpdateText);
@@ -329,10 +358,7 @@ namespace OmenSuperHub {
         VerticalAlignment = VerticalAlignment.Top
       };
       actions.Children.Add(CreateActionButton("立即刷新", (s, e) => RefreshDashboard()));
-      actions.Children.Add(CreateActionButton("帮助", (s, e) => {
-        HelpForm.Instance.Show();
-        HelpForm.Instance.BringToFront();
-      }));
+      actions.Children.Add(CreateActionButton("帮助", (s, e) => ShowHelpSection()));
       actions.Children.Add(CreateActionButton("隐藏到托盘", (s, e) => window.Hide()));
 
       Grid.SetColumn(left, 0);
@@ -362,7 +388,7 @@ namespace OmenSuperHub {
     Border BuildCoolingPanel() {
       var card = CreateCard(220);
       var grid = CreateSettingsGrid();
-      AddTitleToGrid(grid, "散热与风扇");
+      AddTitleToGrid(grid, "散热与风扇", "调节风扇模式、转速曲线和温度响应速度。");
 
       fanModeComboBox = CreateComboBox(fanModeItems, FanModeComboBox_SelectionChanged);
       fanControlComboBox = CreateComboBox(fanControlItems, FanControlComboBox_SelectionChanged);
@@ -380,7 +406,7 @@ namespace OmenSuperHub {
     Border BuildPerformancePanel() {
       var card = CreateCard(180);
       var grid = CreateSettingsGrid();
-      AddTitleToGrid(grid, "功耗与性能");
+      AddTitleToGrid(grid, "功耗与性能", "设定 CPU/GPU 功耗策略与显卡锁频上限。");
 
       cpuPowerComboBox = CreateComboBox(cpuPowerItems, CpuPowerComboBox_SelectionChanged);
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
@@ -396,7 +422,7 @@ namespace OmenSuperHub {
     Border BuildOverlayPanel() {
       var card = CreateCard(110);
       var grid = CreateSettingsGrid();
-      AddTitleToGrid(grid, "浮窗与显示");
+      AddTitleToGrid(grid, "浮窗与显示", "控制桌面浮窗显示状态。");
 
       floatingBarButton = new Button {
         Content = "浮窗: 关闭",
@@ -404,7 +430,7 @@ namespace OmenSuperHub {
         FontSize = 14,
         FontWeight = FontWeights.SemiBold,
         Foreground = strongText,
-        Background = new SolidColorBrush(Color.FromRgb(244, 246, 250)),
+        Background = subtleFill,
         BorderBrush = borderColor,
         HorizontalAlignment = HorizontalAlignment.Left,
         MinWidth = 160
@@ -419,7 +445,7 @@ namespace OmenSuperHub {
     Border BuildStatusPanel() {
       var card = CreateCard(230);
       var grid = CreateSettingsGrid();
-      AddTitleToGrid(grid, "硬件状态");
+      AddTitleToGrid(grid, "硬件状态", "读取当前硬件能力与电源/显卡状态。");
 
       AddValueRow(grid, 1, "显卡模式", out gfxModeText);
       AddValueRow(grid, 2, "供电/适配器", out adapterText);
@@ -437,13 +463,17 @@ namespace OmenSuperHub {
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-      root.Children.Add(CreateSectionTitle("实时详情"));
+      var titleWrap = new StackPanel();
+      titleWrap.Children.Add(CreateSectionTitle("实时详情"));
+      titleWrap.Children.Add(CreateSectionSubtitle("遥测和当前运行配置快照。"));
+      root.Children.Add(titleWrap);
 
-      var tabs = new TabControl {
+      detailsTabControl = new TabControl {
         Margin = new Thickness(0, 6, 0, 0)
       };
       var telemetryTab = new TabItem { Header = "实时遥测" };
       var configTab = new TabItem { Header = "运行配置" };
+      var helpTab = new TabItem { Header = "帮助" };
 
       telemetryTextBox = new TextBox {
         FontFamily = new FontFamily("Consolas"),
@@ -467,32 +497,47 @@ namespace OmenSuperHub {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         TextWrapping = TextWrapping.NoWrap
       };
+      helpTextBox = new TextBox {
+        FontFamily = new FontFamily("Segoe UI"),
+        FontSize = 14,
+        IsReadOnly = true,
+        BorderThickness = new Thickness(0),
+        Background = Brushes.White,
+        Foreground = strongText,
+        AcceptsReturn = true,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        TextWrapping = TextWrapping.Wrap
+      };
 
       telemetryTab.Content = telemetryTextBox;
       configTab.Content = configTextBox;
-      tabs.Items.Add(telemetryTab);
-      tabs.Items.Add(configTab);
+      helpTab.Content = helpTextBox;
+      detailsTabControl.Items.Add(telemetryTab);
+      detailsTabControl.Items.Add(configTab);
+      detailsTabControl.Items.Add(helpTab);
 
-      Grid.SetRow(tabs, 1);
-      root.Children.Add(tabs);
+      Grid.SetRow(detailsTabControl, 1);
+      root.Children.Add(detailsTabControl);
       card.Child = root;
       return card;
     }
 
     Grid CreateSettingsGrid() {
       var grid = new Grid();
-      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
       return grid;
     }
 
-    void AddTitleToGrid(Grid grid, string title) {
+    void AddTitleToGrid(Grid grid, string title, string subtitle) {
       grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-      var label = CreateSectionTitle(title);
-      Grid.SetRow(label, 0);
-      Grid.SetColumn(label, 0);
-      Grid.SetColumnSpan(label, 2);
-      grid.Children.Add(label);
+      var wrap = new StackPanel();
+      wrap.Children.Add(CreateSectionTitle(title));
+      wrap.Children.Add(CreateSectionSubtitle(subtitle));
+      Grid.SetRow(wrap, 0);
+      Grid.SetColumn(wrap, 0);
+      Grid.SetColumnSpan(wrap, 2);
+      grid.Children.Add(wrap);
     }
 
     void AddControlRow(Grid grid, int rowIndex, string title, Control control) {
@@ -503,13 +548,13 @@ namespace OmenSuperHub {
       var label = new TextBlock {
         Text = title,
         Foreground = mutedText,
-        FontSize = 14,
+        FontSize = 13,
         VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(0, 8, 8, 8)
+        Margin = new Thickness(0, 6, 8, 6)
       };
 
       if (control is FrameworkElement frameworkElement) {
-        frameworkElement.Margin = new Thickness(0, 4, 0, 8);
+        frameworkElement.Margin = new Thickness(0, 2, 0, 8);
       }
 
       Grid.SetRow(label, rowIndex);
@@ -529,16 +574,16 @@ namespace OmenSuperHub {
       var label = new TextBlock {
         Text = title,
         Foreground = mutedText,
-        FontSize = 14,
+        FontSize = 13,
         VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(0, 8, 8, 8)
+        Margin = new Thickness(0, 6, 8, 6)
       };
       valueText = new TextBlock {
         Text = "--",
         Foreground = strongText,
-        FontSize = 15,
+        FontSize = 14,
         FontWeight = FontWeights.SemiBold,
-        Margin = new Thickness(0, 8, 0, 8),
+        Margin = new Thickness(0, 6, 0, 6),
         TextWrapping = TextWrapping.Wrap
       };
 
@@ -552,8 +597,13 @@ namespace OmenSuperHub {
 
     ComboBox CreateComboBox(IEnumerable<string> items, SelectionChangedEventHandler handler) {
       var comboBox = new ComboBox {
-        MinWidth = 220,
-        FontSize = 14
+        MinWidth = 260,
+        Height = 34,
+        FontSize = 14,
+        Padding = new Thickness(6, 3, 6, 3),
+        Background = subtleFill,
+        BorderBrush = borderColor,
+        Foreground = strongText
       };
       foreach (var item in items) {
         comboBox.Items.Add(item);
@@ -587,6 +637,7 @@ namespace OmenSuperHub {
 
       telemetryTextBox.Text = BuildTelemetryText(snapshot);
       configTextBox.Text = BuildConfigText(snapshot);
+      helpTextBox.Text = BuildHelpText();
 
       SyncControlState(snapshot);
     }
@@ -603,11 +654,11 @@ namespace OmenSuperHub {
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
 
         bool overlayEnabled = snapshot.FloatingBarEnabled;
-        floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
-        floatingBarButton.Background = overlayEnabled
-          ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
-          : new SolidColorBrush(Color.FromRgb(244, 246, 250));
-        floatingBarButton.Foreground = overlayEnabled ? accentGreen : strongText;
+      floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
+      floatingBarButton.Background = overlayEnabled
+        ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
+        : subtleFill;
+      floatingBarButton.Foreground = overlayEnabled ? accentGreen : strongText;
       } finally {
         syncingControlState = false;
       }
@@ -716,6 +767,28 @@ namespace OmenSuperHub {
         $"Keyboard       : {FormatKeyboardType(snapshot.KeyboardType)}"
       };
       return string.Join(Environment.NewLine, lines);
+    }
+
+    string BuildHelpText() {
+      Version version = Assembly.GetExecutingAssembly().GetName().Version;
+      return
+        $"版本号：{version}{Environment.NewLine}{Environment.NewLine}" +
+        "一、散热与风扇" + Environment.NewLine +
+        "1. 风扇曲线支持“安静模式(silent.txt)”和“降温模式(cool.txt)”。" + Environment.NewLine +
+        "2. 若需自定义曲线，请编辑同目录文本文件，格式为：CPU,Fan1,Fan2,GPU,Fan1,Fan2。" + Environment.NewLine +
+        "3. 温度响应支持 实时/高/中/低，用于抑制转速抖动。" + Environment.NewLine + Environment.NewLine +
+        "二、功耗与性能" + Environment.NewLine +
+        "1. 模式切换会影响 CPU/GPU 行为，部分机型会在切换时重置功耗上限。" + Environment.NewLine +
+        "2. CPU 功率设置会同时影响 PL1/PL2。" + Environment.NewLine +
+        "3. GPU 策略与锁频用于在温度、噪音和性能之间平衡。" + Environment.NewLine + Environment.NewLine +
+        "三、浮窗与监控" + Environment.NewLine +
+        "1. 浮窗显示每秒刷新一次，可在主页面直接开关。" + Environment.NewLine +
+        "2. 主界面“实时遥测”展示 CPU/GPU/电池/风扇等核心数据。" + Environment.NewLine + Environment.NewLine +
+        "四、托盘与启动" + Environment.NewLine +
+        "1. 托盘菜单已精简，主要操作集中在主窗口设置页。" + Environment.NewLine +
+        "2. 点击“隐藏到托盘”只隐藏窗口，不退出程序。" + Environment.NewLine + Environment.NewLine +
+        "项目地址：" + Environment.NewLine +
+        "https://github.com/breadeding/OmenSuperHub";
     }
 
     string BuildCapabilitiesSummary(Program.DashboardSnapshot snapshot) {

@@ -291,7 +291,7 @@ namespace OmenSuperHub {
         RestoreConfig();
 
         if (alreadyRead != alreadyReadCode) {
-          HelpForm.Instance.Show();
+          MainForm.Instance.ShowHelpSection();
           alreadyRead = alreadyReadCode;
           SaveConfig("AlreadyRead");
         }
@@ -532,7 +532,7 @@ namespace OmenSuperHub {
         ApplyFloatingBarSetting(floatingBar != "on");
       }, false));
       trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("关于OSH", null, (s, e) => {
-        HelpForm.Instance.Show();
+        MainForm.Instance.ShowHelpSection();
       }, false));
       trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
       trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("退出", null, (s, e) => Exit(), false));

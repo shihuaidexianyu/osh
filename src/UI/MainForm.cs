@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -111,10 +110,6 @@ namespace OmenSuperHub {
     CheckBox smartPowerControlCheckBox;
     Button floatingBarButton;
 
-    TabControl detailsTabControl;
-    TextBox telemetryTextBox;
-    TextBox configTextBox;
-    TextBox helpTextBox;
     int lastAppliedManualFanRpm = -1;
 
     MainForm() {
@@ -173,9 +168,6 @@ namespace OmenSuperHub {
       EnsureWindow();
       if (!window.IsVisible) {
         window.Show();
-      }
-      if (detailsTabControl != null && detailsTabControl.Items.Count >= 3) {
-        detailsTabControl.SelectedIndex = 2;
       }
       window.Visibility = Visibility.Visible;
       window.Activate();
@@ -236,42 +228,43 @@ namespace OmenSuperHub {
         Margin = new Thickness(22, 18, 22, 18),
         Background = pageBack
       };
-      root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
-      root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-      var leftScroll = new ScrollViewer {
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        Margin = new Thickness(0, 0, 16, 0),
-        Background = Brushes.Transparent
-      };
-      var leftStack = new StackPanel();
-      leftScroll.Content = leftStack;
-
-      leftStack.Children.Add(CreateSidebarBrandCard());
-      leftStack.Children.Add(CreateSidebarSummaryCard());
-
-      var rightScroll = new ScrollViewer {
+      var mainScroll = new ScrollViewer {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         Background = Brushes.Transparent
       };
-      var rightStack = new StackPanel();
-      rightScroll.Content = rightStack;
+      var contentStack = new StackPanel();
+      mainScroll.Content = contentStack;
 
-      rightStack.Children.Add(BuildHeaderPanel());
-      rightStack.Children.Add(BuildCoolingPanel());
-      rightStack.Children.Add(BuildPerformancePanel());
-      rightStack.Children.Add(BuildSmartPowerPanel());
-      rightStack.Children.Add(BuildStrategyTuningPanel());
-      rightStack.Children.Add(BuildOverlayPanel());
-      rightStack.Children.Add(BuildStatusPanel());
-      rightStack.Children.Add(BuildDetailsPanel());
+      contentStack.Children.Add(BuildHeaderPanel());
+      contentStack.Children.Add(BuildQuickOverviewPanel());
 
-      Grid.SetColumn(leftScroll, 0);
-      Grid.SetColumn(rightScroll, 1);
-      root.Children.Add(leftScroll);
-      root.Children.Add(rightScroll);
+      var controlsGrid = new Grid();
+      controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+      var leftColumn = new StackPanel {
+        Margin = new Thickness(0, 0, 10, 0)
+      };
+      leftColumn.Children.Add(BuildCoolingPanel());
+      leftColumn.Children.Add(BuildPerformancePanel());
+      leftColumn.Children.Add(BuildOverlayPanel());
+
+      var rightColumn = new StackPanel {
+        Margin = new Thickness(10, 0, 0, 0)
+      };
+      rightColumn.Children.Add(BuildSmartPowerPanel());
+      rightColumn.Children.Add(BuildStatusPanel());
+
+      Grid.SetColumn(leftColumn, 0);
+      Grid.SetColumn(rightColumn, 1);
+      controlsGrid.Children.Add(leftColumn);
+      controlsGrid.Children.Add(rightColumn);
+      contentStack.Children.Add(controlsGrid);
+
+      contentStack.Children.Add(BuildStrategyTuningPanel());
+
+      root.Children.Add(mainScroll);
       window.Content = root;
     }
 
@@ -306,74 +299,89 @@ namespace OmenSuperHub {
       };
     }
 
-    TextBlock CreateValueLabel(string text) {
-      return new TextBlock {
-        Text = text,
+    Border BuildQuickOverviewPanel() {
+      var card = CreateCard(210);
+
+      var root = new StackPanel();
+      root.Children.Add(CreateSectionTitle("总览"));
+      root.Children.Add(CreateSectionSubtitle("温度、功率、电池与风扇状态一屏可见。"));
+
+      var tiles = new WrapPanel {
+        HorizontalAlignment = HorizontalAlignment.Stretch
+      };
+
+      tiles.Children.Add(CreateOverviewMetric("CPU", "温度 / 功率", accentBlue, out leftCpuText));
+      tiles.Children.Add(CreateOverviewMetric("GPU", "温度 / 功率", accentGreen, out leftGpuText));
+      tiles.Children.Add(CreateOverviewMetric("电池", "供电 / 功率", accentOrange, out leftBatteryText));
+      tiles.Children.Add(CreateOverviewMetric("风扇", "真实 RPM", accentBlue, out leftFanText));
+      tiles.Children.Add(CreateOverviewMetric("策略", "当前控制模式", accentGreen, out leftModeText));
+
+      root.Children.Add(tiles);
+      card.Child = root;
+      return card;
+    }
+
+    Border CreateOverviewMetric(string title, string subtitle, Brush accentBrush, out TextBlock valueText) {
+      var content = new StackPanel();
+      content.Children.Add(new TextBlock {
+        Text = title,
         Foreground = strongText,
-        FontSize = 15,
-        FontWeight = FontWeights.SemiBold,
-        Margin = new Thickness(0, 0, 0, 8),
+        FontSize = 14,
+        FontWeight = FontWeights.SemiBold
+      });
+      content.Children.Add(new TextBlock {
+        Text = subtitle,
+        Foreground = mutedText,
+        FontSize = 12,
+        Margin = new Thickness(0, 0, 0, 6)
+      });
+
+      valueText = new TextBlock {
+        Text = "--",
+        Foreground = strongText,
+        FontSize = 18,
+        FontWeight = FontWeights.Bold,
         TextWrapping = TextWrapping.Wrap
       };
-    }
+      content.Children.Add(valueText);
 
-    Border CreateSidebarBrandCard() {
-      var card = CreateCard(96);
-      var stack = new StackPanel();
-      stack.Children.Add(new TextBlock {
-        Text = "OmenSuperHub",
-        Foreground = strongText,
-        FontSize = 28,
-        FontWeight = FontWeights.Bold
-      });
-      stack.Children.Add(new TextBlock {
-        Text = "设备控制与状态",
-        Foreground = mutedText,
-        FontSize = 14
-      });
-      card.Child = stack;
-      return card;
-    }
-
-    Border CreateSidebarSummaryCard() {
-      var card = CreateCard(240);
-      var stack = new StackPanel();
-      stack.Children.Add(CreateSectionTitle("当前状态"));
-      stack.Children.Add(CreateSectionSubtitle("核心温度、功率和风扇运行状态"));
-
-      leftCpuText = CreateValueLabel("CPU --");
-      leftGpuText = CreateValueLabel("GPU --");
-      leftBatteryText = CreateValueLabel("Battery --");
-      leftFanText = CreateValueLabel("Fan --");
-      leftModeText = CreateValueLabel("Mode --");
-
-      stack.Children.Add(leftCpuText);
-      stack.Children.Add(leftGpuText);
-      stack.Children.Add(leftBatteryText);
-      stack.Children.Add(leftFanText);
-      stack.Children.Add(leftModeText);
-      card.Child = stack;
-      return card;
+      return new Border {
+        MinWidth = 205,
+        Margin = new Thickness(0, 0, 10, 10),
+        Padding = new Thickness(12, 10, 12, 10),
+        CornerRadius = new CornerRadius(8),
+        BorderBrush = borderColor,
+        BorderThickness = new Thickness(1),
+        Background = subtleFill,
+        Child = new Border {
+          BorderBrush = accentBrush,
+          BorderThickness = new Thickness(3, 0, 0, 0),
+          Padding = new Thickness(10, 0, 0, 0),
+          Child = content
+        }
+      };
     }
 
     Border BuildHeaderPanel() {
       var card = CreateCard(130);
 
-      var root = new Grid();
-      root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-      root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
       var left = new StackPanel();
       left.Children.Add(new TextBlock {
-        Text = "设置",
+        Text = "OmenSuperHub 设置",
         Foreground = strongText,
-        FontSize = 36,
+        FontSize = 30,
         FontWeight = FontWeights.Bold
+      });
+      left.Children.Add(new TextBlock {
+        Text = "风扇、功耗与设备状态集中控制",
+        Foreground = mutedText,
+        FontSize = 13,
+        Margin = new Thickness(0, 2, 0, 2)
       });
       totalPowerText = new TextBlock {
         Text = "-- W",
         Foreground = accentOrange,
-        FontSize = 44,
+        FontSize = 40,
         FontWeight = FontWeights.Bold
       };
       lastUpdateText = new TextBlock {
@@ -383,37 +391,8 @@ namespace OmenSuperHub {
       };
       left.Children.Add(totalPowerText);
       left.Children.Add(lastUpdateText);
-
-      var actions = new StackPanel {
-        Orientation = Orientation.Horizontal,
-        VerticalAlignment = VerticalAlignment.Top
-      };
-      actions.Children.Add(CreateActionButton("立即刷新", (s, e) => RefreshDashboard()));
-      actions.Children.Add(CreateActionButton("帮助", (s, e) => ShowHelpSection()));
-      actions.Children.Add(CreateActionButton("隐藏到托盘", (s, e) => window.Hide()));
-
-      Grid.SetColumn(left, 0);
-      Grid.SetColumn(actions, 1);
-      root.Children.Add(left);
-      root.Children.Add(actions);
-
-      card.Child = root;
+      card.Child = left;
       return card;
-    }
-
-    Button CreateActionButton(string text, RoutedEventHandler click) {
-      var button = new Button {
-        Content = text,
-        Margin = new Thickness(0, 0, 10, 0),
-        Padding = new Thickness(14, 8, 14, 8),
-        FontSize = 14,
-        FontWeight = FontWeights.SemiBold,
-        Foreground = strongText,
-        Background = Brushes.White,
-        BorderBrush = borderColor
-      };
-      button.Click += click;
-      return button;
     }
 
     Border BuildCoolingPanel() {
@@ -658,71 +637,6 @@ namespace OmenSuperHub {
       return card;
     }
 
-    Border BuildDetailsPanel() {
-      var card = CreateCard(320);
-      var root = new Grid();
-      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-      root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-      var titleWrap = new StackPanel();
-      titleWrap.Children.Add(CreateSectionTitle("实时详情"));
-      titleWrap.Children.Add(CreateSectionSubtitle("遥测和当前运行配置快照。"));
-      root.Children.Add(titleWrap);
-
-      detailsTabControl = new TabControl {
-        Margin = new Thickness(0, 6, 0, 0)
-      };
-      var telemetryTab = new TabItem { Header = "实时遥测" };
-      var configTab = new TabItem { Header = "运行配置" };
-      var helpTab = new TabItem { Header = "帮助" };
-
-      telemetryTextBox = new TextBox {
-        FontFamily = new FontFamily("Consolas"),
-        FontSize = 13,
-        IsReadOnly = true,
-        BorderThickness = new Thickness(0),
-        Background = Brushes.White,
-        Foreground = strongText,
-        AcceptsReturn = true,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        TextWrapping = TextWrapping.NoWrap
-      };
-      configTextBox = new TextBox {
-        FontFamily = new FontFamily("Consolas"),
-        FontSize = 13,
-        IsReadOnly = true,
-        BorderThickness = new Thickness(0),
-        Background = Brushes.White,
-        Foreground = strongText,
-        AcceptsReturn = true,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        TextWrapping = TextWrapping.NoWrap
-      };
-      helpTextBox = new TextBox {
-        FontFamily = new FontFamily("Segoe UI"),
-        FontSize = 14,
-        IsReadOnly = true,
-        BorderThickness = new Thickness(0),
-        Background = Brushes.White,
-        Foreground = strongText,
-        AcceptsReturn = true,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        TextWrapping = TextWrapping.Wrap
-      };
-
-      telemetryTab.Content = telemetryTextBox;
-      configTab.Content = configTextBox;
-      helpTab.Content = helpTextBox;
-      detailsTabControl.Items.Add(telemetryTab);
-      detailsTabControl.Items.Add(configTab);
-      detailsTabControl.Items.Add(helpTab);
-
-      Grid.SetRow(detailsTabControl, 1);
-      root.Children.Add(detailsTabControl);
-      card.Child = root;
-      return card;
-    }
-
     Grid CreateSettingsGrid() {
       var grid = new Grid();
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
@@ -943,11 +857,11 @@ namespace OmenSuperHub {
       totalPowerText.Text = $"{totalPower:F1} W";
       lastUpdateText.Text = $"最近刷新: {DateTime.Now:HH:mm:ss}";
 
-      leftCpuText.Text = $"CPU {snapshot.CpuTemperature:F1}°C / {snapshot.CpuPowerWatts:F1}W";
-      leftGpuText.Text = snapshot.MonitorGpu ? $"GPU {snapshot.GpuTemperature:F1}°C / {snapshot.GpuPowerWatts:F1}W" : "GPU disabled";
+      leftCpuText.Text = $"{snapshot.CpuTemperature:F1} °C | {snapshot.CpuPowerWatts:F1} W";
+      leftGpuText.Text = snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C | {snapshot.GpuPowerWatts:F1} W" : "监控关闭";
       leftBatteryText.Text = BuildBatterySummary(snapshot);
-      leftFanText.Text = $"Fan {FormatFanRpm(snapshot.FanSpeeds)}";
-      leftModeText.Text = $"Mode {(snapshot.FanMode == "performance" ? "狂暴" : "平衡")} / {ConvertFanControlValue(snapshot.FanControl)}";
+      leftFanText.Text = FormatFanRpm(snapshot.FanSpeeds);
+      leftModeText.Text = $"{(snapshot.FanMode == "performance" ? "狂暴" : "平衡")} · {ConvertFanControlValue(snapshot.FanControl)}";
 
       gfxModeText.Text = FormatGfxMode(snapshot.GraphicsMode);
       adapterText.Text = $"{FormatAdapterStatus(snapshot.SmartAdapterStatus)} / {(snapshot.AcOnline ? "AC" : "Battery")}";
@@ -957,11 +871,34 @@ namespace OmenSuperHub {
       fanTypeText.Text = snapshot.FanTypeInfo == null ? "Unknown" : $"{snapshot.FanTypeInfo.Fan1Type}/{snapshot.FanTypeInfo.Fan2Type}";
       UpdateSmartPowerVisual(snapshot);
 
-      telemetryTextBox.Text = BuildTelemetryText(snapshot);
-      configTextBox.Text = BuildConfigText(snapshot);
-      helpTextBox.Text = BuildHelpText();
+      if (!IsControlInteractionActive()) {
+        SyncControlState(snapshot);
+      }
+    }
 
-      SyncControlState(snapshot);
+    bool IsControlInteractionActive() {
+      if (fanModeComboBox?.IsDropDownOpen == true) return true;
+      if (fanControlComboBox?.IsDropDownOpen == true) return true;
+      if (fanTableComboBox?.IsDropDownOpen == true) return true;
+      if (tempSensitivityComboBox?.IsDropDownOpen == true) return true;
+      if (cpuPowerComboBox?.IsDropDownOpen == true) return true;
+      if (gpuPowerComboBox?.IsDropDownOpen == true) return true;
+      if (gpuClockComboBox?.IsDropDownOpen == true) return true;
+      if (floatingBarLocationComboBox?.IsDropDownOpen == true) return true;
+
+      if (manualFanRpmSlider?.IsMouseCaptureWithin == true) return true;
+      if (cpuEmergencySlider?.IsMouseCaptureWithin == true) return true;
+      if (gpuEmergencySlider?.IsMouseCaptureWithin == true) return true;
+      if (cpuRecoverSlider?.IsMouseCaptureWithin == true) return true;
+      if (gpuRecoverSlider?.IsMouseCaptureWithin == true) return true;
+      if (cpuFanBoostOnSlider?.IsMouseCaptureWithin == true) return true;
+      if (gpuFanBoostOnSlider?.IsMouseCaptureWithin == true) return true;
+      if (cpuFanBoostOffSlider?.IsMouseCaptureWithin == true) return true;
+      if (gpuFanBoostOffSlider?.IsMouseCaptureWithin == true) return true;
+      if (batteryGuardTriggerSlider?.IsMouseCaptureWithin == true) return true;
+      if (batteryGuardReleaseSlider?.IsMouseCaptureWithin == true) return true;
+
+      return false;
     }
 
     void SyncControlState(DashboardSnapshot snapshot) {
@@ -992,12 +929,12 @@ namespace OmenSuperHub {
         SyncPowerTuningControls();
 
         bool overlayEnabled = snapshot.FloatingBarEnabled;
-      floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
-      floatingBarButton.Background = overlayEnabled
-        ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
-        : subtleFill;
-      floatingBarButton.Foreground = overlayEnabled ? accentGreen : strongText;
-      SelectComboItem(floatingBarLocationComboBox, snapshot.FloatingBarLocation == "right" ? "右上角" : "左上角");
+        floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
+        floatingBarButton.Background = overlayEnabled
+          ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
+          : subtleFill;
+        floatingBarButton.Foreground = overlayEnabled ? accentGreen : strongText;
+        SelectComboItem(floatingBarLocationComboBox, snapshot.FloatingBarLocation == "right" ? "右上角" : "左上角");
       } finally {
         syncingControlState = false;
       }
@@ -1406,74 +1343,6 @@ namespace OmenSuperHub {
       float? power = GetBatteryPowerWatts(snapshot.Battery);
       if (power.HasValue) return $"{BuildBatteryState(snapshot.Battery)} {power.Value:F1}W";
       return $"{BuildBatteryState(snapshot.Battery)} {snapshot.BatteryPercent}%";
-    }
-
-    string BuildTelemetryText(DashboardSnapshot snapshot) {
-      float? batteryPower = GetBatteryPowerWatts(snapshot.Battery);
-      var lines = new List<string> {
-        $"CPU Temp       : {snapshot.CpuTemperature:F1} °C",
-        $"CPU Power      : {snapshot.CpuPowerWatts:F1} W",
-        $"GPU Temp       : {(snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C" : "disabled")}",
-        $"GPU Power      : {(snapshot.MonitorGpu ? $"{snapshot.GpuPowerWatts:F1} W" : "--")}",
-        $"System Est     : {snapshot.EstimatedSystemPowerWatts:F1} W",
-        $"System Target  : {snapshot.TargetSystemPowerWatts:F1} W",
-        $"Battery Power  : {(batteryPower.HasValue ? $"{batteryPower.Value:F1} W" : "--")}",
-        $"Battery State  : {BuildBatteryState(snapshot.Battery)}",
-        $"Capacity       : {(snapshot.Battery != null ? $"{snapshot.Battery.RemainingCapacityMilliwattHours / 1000f:F1} Wh" : "--")}",
-        $"Voltage        : {(snapshot.Battery != null ? $"{snapshot.Battery.VoltageMillivolts / 1000f:F2} V" : "--")}",
-        $"Battery %      : {snapshot.BatteryPercent}%",
-        $"Fan RPM        : {FormatFanRpm(snapshot.FanSpeeds)}",
-        $"MUX            : {FormatGfxMode(snapshot.GraphicsMode)}",
-        $"Adapter        : {FormatAdapterStatus(snapshot.SmartAdapterStatus)}"
-      };
-      return string.Join(Environment.NewLine, lines);
-    }
-
-    string BuildConfigText(DashboardSnapshot snapshot) {
-      var lines = new List<string> {
-        $"Mode           : {(snapshot.FanMode == "performance" ? "狂暴" : "平衡")}",
-        $"Fan Control    : {ConvertFanControlValue(snapshot.FanControl)}",
-        $"Fan Curve      : {(snapshot.FanTable == "cool" ? "降温模式" : "安静模式")}",
-        $"Sensitivity    : {ConvertTempSensitivity(snapshot.TempSensitivity)}",
-        $"CPU Limit      : {(snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting)}",
-        $"GPU Policy     : {ConvertGpuPowerValue(snapshot.GpuPowerSetting)}",
-        $"GPU Clock      : {(snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原")}",
-        $"Smart Power    : {(snapshot.SmartPowerControlEnabled ? "Enabled" : "Disabled")} ({FormatSmartStateLabel(snapshot.SmartPowerControlState)})",
-        $"Smart Reason   : {FormatSmartReason(snapshot.SmartPowerControlReason)}",
-        $"Smart CPU Cap  : {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts} W" : "--")}",
-        $"Smart GPU Tier : {snapshot.SmartGpuTier}",
-        $"Smart FanBoost : {(snapshot.SmartFanBoostActive ? "On" : "Off")}",
-        $"Floating Bar   : {(snapshot.FloatingBarEnabled ? "开启" : "关闭")}",
-        $"Overlay Pos    : {(snapshot.FloatingBarLocation == "right" ? "右上角" : "左上角")}",
-        $"GPU Control    : {FormatGpuControl(snapshot.GpuStatus)}",
-        $"Adapter        : {FormatAdapterStatus(snapshot.SmartAdapterStatus)}",
-        $"Capabilities   : {BuildCapabilitiesSummary(snapshot)}",
-        $"Keyboard       : {FormatKeyboardType(snapshot.KeyboardType)}"
-      };
-      return string.Join(Environment.NewLine, lines);
-    }
-
-    string BuildHelpText() {
-      Version version = Assembly.GetExecutingAssembly().GetName().Version;
-      return
-        $"版本号：{version}{Environment.NewLine}{Environment.NewLine}" +
-        "一、散热与风扇" + Environment.NewLine +
-        "1. 风扇曲线支持“安静模式(silent.txt)”和“降温模式(cool.txt)”。" + Environment.NewLine +
-        "2. 若需自定义曲线，请编辑同目录文本文件，格式为：CPU,Fan1,Fan2,GPU,Fan1,Fan2。" + Environment.NewLine +
-        "3. 温度响应支持 实时/高/中/低，用于抑制转速抖动。" + Environment.NewLine + Environment.NewLine +
-        "二、功耗与性能" + Environment.NewLine +
-        "1. 模式切换会影响 CPU/GPU 行为，部分机型会在切换时重置功耗上限。" + Environment.NewLine +
-        "2. CPU 功率设置会同时影响 PL1/PL2。" + Environment.NewLine +
-        "3. GPU 策略与锁频用于在温度、噪音和性能之间平衡。" + Environment.NewLine +
-        "4. 智能功耗控制会在不超过手动上限的前提下动态调节，并在高温时进入紧急保护。" + Environment.NewLine + Environment.NewLine +
-        "三、浮窗与监控" + Environment.NewLine +
-        "1. 浮窗显示每秒刷新一次，可在主页面直接开关。" + Environment.NewLine +
-        "2. 主界面“实时遥测”展示 CPU/GPU/电池/风扇等核心数据。" + Environment.NewLine + Environment.NewLine +
-        "四、托盘与启动" + Environment.NewLine +
-        "1. 托盘菜单已精简，主要操作集中在主窗口设置页。" + Environment.NewLine +
-        "2. 点击“隐藏到托盘”只隐藏窗口，不退出程序。" + Environment.NewLine + Environment.NewLine +
-        "项目地址：" + Environment.NewLine +
-        "https://github.com/breadeding/OmenSuperHub";
     }
 
     string BuildCapabilitiesSummary(DashboardSnapshot snapshot) {

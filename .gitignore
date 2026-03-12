@@ -11,3 +11,4 @@ publish/
 _ext/
 backup/
 packages/
+*.pfx

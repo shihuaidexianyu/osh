@@ -66,6 +66,8 @@ namespace OmenSuperHub {
     TextBlock capabilitiesText;
     TextBlock keyboardText;
     TextBlock fanTypeText;
+    TextBlock temperatureSensorSummaryText;
+    TextBox temperatureSensorListTextBox;
     Border smartStateBadge;
     TextBlock smartStateText;
     TextBlock smartReasonText;
@@ -255,6 +257,7 @@ namespace OmenSuperHub {
       };
       rightColumn.Children.Add(BuildSmartPowerPanel());
       rightColumn.Children.Add(BuildStatusPanel());
+      rightColumn.Children.Add(BuildTemperatureSensorsPanel());
 
       Grid.SetColumn(leftColumn, 0);
       Grid.SetColumn(rightColumn, 1);
@@ -637,6 +640,48 @@ namespace OmenSuperHub {
       return card;
     }
 
+    Border BuildTemperatureSensorsPanel() {
+      var card = CreateCard(320);
+      var root = new Grid();
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+      var titleWrap = new StackPanel();
+      titleWrap.Children.Add(CreateSectionTitle("温度传感器"));
+      titleWrap.Children.Add(CreateSectionSubtitle("递归读取主硬件与子硬件的全部温度传感器。"));
+      Grid.SetRow(titleWrap, 0);
+      root.Children.Add(titleWrap);
+
+      temperatureSensorSummaryText = new TextBlock {
+        Text = "正在读取...",
+        Foreground = mutedText,
+        FontSize = 13,
+        Margin = new Thickness(0, 0, 0, 8)
+      };
+      Grid.SetRow(temperatureSensorSummaryText, 1);
+      root.Children.Add(temperatureSensorSummaryText);
+
+      temperatureSensorListTextBox = new TextBox {
+        FontFamily = new FontFamily("Consolas"),
+        FontSize = 12,
+        IsReadOnly = true,
+        BorderThickness = new Thickness(1),
+        BorderBrush = borderColor,
+        Background = subtleFill,
+        Foreground = strongText,
+        AcceptsReturn = true,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        TextWrapping = TextWrapping.NoWrap,
+        MinHeight = 210
+      };
+      Grid.SetRow(temperatureSensorListTextBox, 2);
+      root.Children.Add(temperatureSensorListTextBox);
+
+      card.Child = root;
+      return card;
+    }
+
     Grid CreateSettingsGrid() {
       var grid = new Grid();
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
@@ -869,6 +914,7 @@ namespace OmenSuperHub {
       capabilitiesText.Text = BuildCapabilitiesSummary(snapshot);
       keyboardText.Text = FormatKeyboardType(snapshot.KeyboardType);
       fanTypeText.Text = snapshot.FanTypeInfo == null ? "Unknown" : $"{snapshot.FanTypeInfo.Fan1Type}/{snapshot.FanTypeInfo.Fan2Type}";
+      UpdateTemperatureSensorsView(snapshot);
       UpdateSmartPowerVisual(snapshot);
 
       if (!IsControlInteractionActive()) {
@@ -1250,8 +1296,60 @@ namespace OmenSuperHub {
         smartActionText.Text =
           $"CPU 上限 {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts}W" : "--")} | " +
           $"GPU 档位 {FormatGpuTier(snapshot.SmartGpuTier)} | " +
-          $"FanBoost {(snapshot.SmartFanBoostActive ? "开启" : "关闭")}";
+          $"FanBoost {(snapshot.SmartFanBoostActive ? "开启" : "关闭")}" +
+          Environment.NewLine +
+          $"控温源 CPU {snapshot.ControlCpuTemperature:F1}°C ({SimplifySensorName(snapshot.ControlCpuSensor)}) | " +
+          $"GPU {snapshot.ControlGpuTemperature:F1}°C ({SimplifySensorName(snapshot.ControlGpuSensor)})";
       }
+    }
+
+    string SimplifySensorName(string sensorName) {
+      if (string.IsNullOrWhiteSpace(sensorName)) {
+        return "--";
+      }
+
+      if (sensorName == "fallback") {
+        return "fallback";
+      }
+
+      string[] split = sensorName.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+      string tail = split.Length == 0 ? sensorName.Trim() : split[split.Length - 1].Trim();
+      return tail.Length <= 28 ? tail : tail.Substring(0, 28) + "...";
+    }
+
+    void UpdateTemperatureSensorsView(DashboardSnapshot snapshot) {
+      if (temperatureSensorSummaryText == null || temperatureSensorListTextBox == null) {
+        return;
+      }
+
+      var sensors = snapshot?.TemperatureSensors;
+      if (sensors == null || sensors.Count == 0) {
+        temperatureSensorSummaryText.Text = "未读取到温度传感器。";
+        temperatureSensorListTextBox.Text = "--";
+        return;
+      }
+
+      var hottest = sensors[0];
+      temperatureSensorSummaryText.Text =
+        $"已读取 {sensors.Count} 个传感器，最高 {hottest.Celsius:F1} °C | " +
+        $"控制CPU {snapshot.ControlCpuTemperature:F1}°C，控制GPU {snapshot.ControlGpuTemperature:F1}°C";
+
+      var lines = new List<string>();
+      int count = Math.Min(sensors.Count, 80);
+      for (int i = 0; i < count; i++) {
+        var sensor = sensors[i];
+        if (sensor == null) {
+          continue;
+        }
+
+        lines.Add($"{i + 1,2}. {sensor.Name} : {sensor.Celsius,5:F1} °C");
+      }
+
+      if (sensors.Count > count) {
+        lines.Add($"... 其余 {sensors.Count - count} 个已省略");
+      }
+
+      temperatureSensorListTextBox.Text = string.Join(Environment.NewLine, lines);
     }
 
     string FormatSmartStateLabel(string state) {

@@ -210,17 +210,23 @@ namespace OmenSuperHub {
     static bool smartPowerControlEnabled = true;
     static string smartPowerControlState = "balanced";
     static string smartPowerControlReason = "stable";
+    static float controlCpuTemperatureC = 0f;
+    static float controlGpuTemperatureC = 0f;
+    static string controlCpuSensorName = "fallback";
+    static string controlGpuSensorName = "fallback";
     static float estimatedSystemPowerWatts = 0;
     static float targetSystemPowerWatts = 0;
     static int smartCpuLimitWatts = 0;
     static string smartGpuTier = "max";
     static bool smartFanBoostActive = false;
     static readonly object powerControlLock = new object();
+    static readonly object temperatureSensorsLock = new object();
     static readonly PowerController powerController = new PowerController();
     //static OpenComputer openComputer = new OpenComputer() { CPUEnabled = true };
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
     static bool openLib = true, monitorGPU = true, monitorFan = true, powerOnline = true;
     static List<int> fanSpeedNow = new List<int> { 20, 23 };
+    static List<TemperatureSensorReading> currentTemperatureSensors = new List<TemperatureSensorReading>();
     static float respondSpeed = 0.4f;
     static Dictionary<float, List<int>> CPUTempFanMap = new Dictionary<float, List<int>>();
     static Dictionary<float, List<int>> GPUTempFanMap = new Dictionary<float, List<int>>();
@@ -236,6 +242,7 @@ namespace OmenSuperHub {
     static TaskEx omenKeyListenerTask;
     static int shutdownStarted = 0;
     static int advancedStatusTick = 0;
+    static int temperatureSensorRefreshTick = 0;
     static int advancedStatusRefreshInProgress = 0;
     static volatile bool checkFloating = false;
     static volatile bool isShuttingDown = false;
@@ -667,6 +674,15 @@ namespace OmenSuperHub {
             batteryDischarge = currentBatteryTelemetry.DischargeRateMilliwatts / 1000f;
           }
 
+          string cpuSensorSource;
+          string gpuSensorSource;
+          float cpuControlTemp = SelectControlTemperature(preferCpu: true, fallback: CPUTemp, out cpuSensorSource);
+          float gpuControlTemp = SelectControlTemperature(preferCpu: false, fallback: GPUTemp, out gpuSensorSource);
+          controlCpuTemperatureC = cpuControlTemp;
+          controlGpuTemperatureC = gpuControlTemp;
+          controlCpuSensorName = cpuSensorSource;
+          controlGpuSensorName = gpuSensorSource;
+
           var input = new PowerControlInput {
             AcOnline = powerOnline,
             PerformanceMode = fanMode == "performance",
@@ -675,9 +691,9 @@ namespace OmenSuperHub {
             FanControlAuto = fanControl == "auto",
             ManualCpuLimitWatts = GetManualCpuLimitWattsForController(),
             ManualGpuTier = GetManualGpuTierForController(),
-            CpuTemperatureC = CPUTemp,
+            CpuTemperatureC = cpuControlTemp,
             CpuPowerWatts = CPUPower,
-            GpuTemperatureC = GPUTemp,
+            GpuTemperatureC = gpuControlTemp,
             GpuPowerWatts = GPUPower,
             BaseSystemPowerWatts = powerOnline ? (monitorGPU ? 14f : 11f) : (monitorGPU ? 10f : 8f),
             BatteryDischargePowerWatts = batteryDischarge,
@@ -1211,9 +1227,67 @@ namespace OmenSuperHub {
       }
     }
 
+    static bool IsGpuHardware(LibreHardwareType type) {
+      return type.ToString().StartsWith("Gpu", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static int GetGpuHardwarePriority(LibreHardwareType type) {
+      string name = type.ToString().ToLowerInvariant();
+      if (name.Contains("nvidia")) return 300;
+      if (name.Contains("amd")) return 200;
+      if (name.Contains("intel")) return 100;
+      if (name.StartsWith("gpu")) return 50;
+      return 0;
+    }
+
+    static int ScoreGpuTempSensorName(string sensorName) {
+      if (string.IsNullOrWhiteSpace(sensorName)) return 10;
+      string name = sensorName.ToLowerInvariant();
+      if (name.Contains("hot spot") || name.Contains("hotspot")) return 95;
+      if (name.Contains("core")) return 90;
+      if (name.Contains("junction")) return 85;
+      if (name.Contains("memory")) return 70;
+      return 50;
+    }
+
+    static int ScoreGpuPowerSensorName(string sensorName) {
+      if (string.IsNullOrWhiteSpace(sensorName)) return 10;
+      string name = sensorName.ToLowerInvariant();
+      if (name.Contains("package")) return 95;
+      if (name.Contains("total board")) return 92;
+      if (name.Contains("board")) return 90;
+      if (name.Contains("gpu power")) return 88;
+      if (name.Contains("core")) return 80;
+      return 50;
+    }
+
+    static void UpdateGpuSensorCandidate(LibreIHardware hardware, LibreISensor sensor, ref int bestTempScore, ref float bestTemp, ref int bestPowerScore, ref float bestPower) {
+      if (sensor == null || !sensor.Value.HasValue) {
+        return;
+      }
+
+      int hardwareScore = GetGpuHardwarePriority(hardware.HardwareType);
+      if (sensor.SensorType == LibreSensorType.Temperature) {
+        int score = hardwareScore + ScoreGpuTempSensorName(sensor.Name);
+        if (score > bestTempScore) {
+          bestTempScore = score;
+          bestTemp = sensor.Value.GetValueOrDefault();
+        }
+      } else if (sensor.SensorType == LibreSensorType.Power) {
+        int score = hardwareScore + ScoreGpuPowerSensorName(sensor.Name);
+        if (score > bestPowerScore) {
+          bestPowerScore = score;
+          bestPower = sensor.Value.GetValueOrDefault();
+        }
+      }
+    }
+
     static void QueryHarware() {
       float openTempCPU = -300, libreTempCPU = -300, tempCPU = 50;
       float openPowerCPU = -1, librePowerCPU = -1;
+      int bestGpuTempScore = int.MinValue, bestGpuPowerScore = int.MinValue;
+      float bestGpuTemp = float.NaN, bestGpuPower = float.NaN;
+      bool gpuTempFound = false, gpuPowerFound = false;
       //if (openLib) {
       //  foreach (OpenIHardware hardware in openComputer.Hardware) {
       //    hardware.Update();
@@ -1233,30 +1307,60 @@ namespace OmenSuperHub {
       //}
 
       foreach (LibreIHardware hardware in libreComputer.Hardware) {
-        if (hardware.HardwareType == LibreHardwareType.Cpu || hardware.HardwareType == LibreHardwareType.GpuNvidia || hardware.HardwareType == LibreHardwareType.GpuAmd) {
+        bool isCpu = hardware.HardwareType == LibreHardwareType.Cpu;
+        bool isGpu = IsGpuHardware(hardware.HardwareType);
+        if (isCpu || isGpu) {
           hardware.Update();
 
           foreach (LibreISensor sensor in hardware.Sensors) {
-            if (hardware.HardwareType == LibreHardwareType.Cpu) {
+            if (isCpu) {
               if (sensor.Name == "CPU Package" && sensor.SensorType == LibreSensorType.Temperature) {
                 libreTempCPU = (int)sensor.Value.GetValueOrDefault();
               }
               if (sensor.Name == "CPU Package" && sensor.SensorType == LibreSensorType.Power) {
                 librePowerCPU = sensor.Value.GetValueOrDefault();
               }
-            } else if (monitorGPU && hardware.HardwareType == LibreHardwareType.GpuNvidia) {
-              if (sensor.Name == "GPU Core" && sensor.SensorType == LibreSensorType.Temperature) {
-                GPUTemp = (int)sensor.Value.GetValueOrDefault() * respondSpeed + GPUTemp * (1.0f - respondSpeed);
+            } else if (monitorGPU && isGpu) {
+              UpdateGpuSensorCandidate(hardware, sensor, ref bestGpuTempScore, ref bestGpuTemp, ref bestGpuPowerScore, ref bestGpuPower);
+            }
+          }
+
+          if (monitorGPU && isGpu && hardware.SubHardware != null) {
+            foreach (LibreIHardware subHardware in hardware.SubHardware) {
+              if (subHardware == null) {
+                continue;
               }
-              if (sensor.Name == "GPU Package" && sensor.SensorType == LibreSensorType.Power) {
-                if ((int)(sensor.Value.GetValueOrDefault() * 10) == 5900)
-                  GPUPower = 0;
-                else
-                  GPUPower = sensor.Value.GetValueOrDefault();
+
+              subHardware.Update();
+              foreach (LibreISensor subSensor in subHardware.Sensors) {
+                UpdateGpuSensorCandidate(hardware, subSensor, ref bestGpuTempScore, ref bestGpuTemp, ref bestGpuPowerScore, ref bestGpuPower);
               }
             }
           }
         }
+      }
+
+      gpuTempFound = bestGpuTempScore > int.MinValue && !float.IsNaN(bestGpuTemp);
+      gpuPowerFound = bestGpuPowerScore > int.MinValue && !float.IsNaN(bestGpuPower);
+      if (monitorGPU && gpuTempFound) {
+        GPUTemp = bestGpuTemp * respondSpeed + GPUTemp * (1.0f - respondSpeed);
+      }
+      if (monitorGPU) {
+        if (gpuPowerFound) {
+          if ((int)(bestGpuPower * 10) == 5900)
+            GPUPower = 0;
+          else
+            GPUPower = Math.Max(0f, bestGpuPower);
+        } else {
+          GPUPower = 0;
+        }
+      }
+
+      if (temperatureSensorRefreshTick <= 0) {
+        RefreshTemperatureSensorsSnapshot();
+        temperatureSensorRefreshTick = 2;
+      } else {
+        temperatureSensorRefreshTick--;
       }
 
       if (openLib && libreTempCPU > -299 && librePowerCPU >= 0) {
@@ -1294,6 +1398,178 @@ namespace OmenSuperHub {
 
       //string tempUnit = "°C";
       //Console.WriteLine($"CPU: {CPU}{tempUnit}, GPU: {GPU}{tempUnit}, Max: {Math.Max(CPU, GPU + 10)}{tempUnit}");
+    }
+
+    static void RefreshTemperatureSensorsSnapshot() {
+      var readings = new List<TemperatureSensorReading>();
+
+      foreach (LibreIHardware hardware in libreComputer.Hardware) {
+        CollectTemperatureSensorsRecursive(hardware, hardware?.Name, readings);
+      }
+
+      readings.Sort((a, b) => b.Celsius.CompareTo(a.Celsius));
+      if (readings.Count > 96) {
+        readings = readings.GetRange(0, 96);
+      }
+
+      lock (temperatureSensorsLock) {
+        currentTemperatureSensors = readings;
+      }
+    }
+
+    static void CollectTemperatureSensorsRecursive(LibreIHardware hardware, string path, List<TemperatureSensorReading> readings) {
+      if (hardware == null || readings == null) {
+        return;
+      }
+
+      hardware.Update();
+
+      foreach (LibreISensor sensor in hardware.Sensors) {
+        if (sensor == null || sensor.SensorType != LibreSensorType.Temperature || !sensor.Value.HasValue) {
+          continue;
+        }
+
+        float value = sensor.Value.GetValueOrDefault();
+        if (float.IsNaN(value) || value < -50f || value > 200f) {
+          continue;
+        }
+
+        string hardwareName = string.IsNullOrWhiteSpace(path) ? (hardware.Name ?? "Unknown") : path;
+        string sensorName = string.IsNullOrWhiteSpace(sensor.Name) ? "Temperature" : sensor.Name;
+        readings.Add(new TemperatureSensorReading {
+          Name = $"{hardwareName} / {sensorName}",
+          Celsius = value
+        });
+      }
+
+      if (hardware.SubHardware == null) {
+        return;
+      }
+
+      foreach (LibreIHardware subHardware in hardware.SubHardware) {
+        if (subHardware == null) {
+          continue;
+        }
+
+        string subPath = string.IsNullOrWhiteSpace(path)
+          ? subHardware.Name
+          : $"{path} > {subHardware.Name}";
+        CollectTemperatureSensorsRecursive(subHardware, subPath, readings);
+      }
+    }
+
+    static readonly string[] CpuPreferredSensorKeywords = {
+      "cpu package",
+      "package",
+      "core max",
+      "cpu core",
+      "p-core",
+      "e-core"
+    };
+
+    static readonly string[] GpuPreferredSensorKeywords = {
+      "gpu hot spot",
+      "gpu hotspot",
+      "hot spot",
+      "hotspot",
+      "junction",
+      "gpu core",
+      "gpu temperature",
+      "memory junction",
+      "memory"
+    };
+
+    static bool LooksLikeCpuSensor(string name) {
+      if (string.IsNullOrWhiteSpace(name))
+        return false;
+
+      string lower = name.ToLowerInvariant();
+      if (lower.Contains("gpu") || lower.Contains("nvidia") || lower.Contains("radeon"))
+        return false;
+
+      return lower.Contains("cpu") ||
+             lower.Contains("p-core") ||
+             lower.Contains("e-core") ||
+             lower.Contains("ia core") ||
+             lower.Contains("package") ||
+             lower.Contains("core");
+    }
+
+    static bool LooksLikeGpuSensor(string name) {
+      if (string.IsNullOrWhiteSpace(name))
+        return false;
+
+      string lower = name.ToLowerInvariant();
+      return lower.Contains("gpu") ||
+             lower.Contains("nvidia") ||
+             lower.Contains("radeon") ||
+             lower.Contains("graphics") ||
+             lower.Contains("hot spot") ||
+             lower.Contains("hotspot") ||
+             lower.Contains("junction");
+    }
+
+    static bool ContainsAnyKeyword(string name, string[] keywords) {
+      if (string.IsNullOrWhiteSpace(name) || keywords == null)
+        return false;
+
+      string lower = name.ToLowerInvariant();
+      foreach (string keyword in keywords) {
+        if (!string.IsNullOrWhiteSpace(keyword) && lower.Contains(keyword))
+          return true;
+      }
+
+      return false;
+    }
+
+    static float SelectControlTemperature(bool preferCpu, float fallback, out string source) {
+      float bestPreferred = float.MinValue;
+      string bestPreferredName = null;
+      float bestGeneral = float.MinValue;
+      string bestGeneralName = null;
+
+      lock (temperatureSensorsLock) {
+        foreach (var reading in currentTemperatureSensors) {
+          if (reading == null || string.IsNullOrWhiteSpace(reading.Name))
+            continue;
+          if (float.IsNaN(reading.Celsius) || reading.Celsius < -50f || reading.Celsius > 200f)
+            continue;
+
+          string sensorName = reading.Name;
+          bool domainMatch = preferCpu ? LooksLikeCpuSensor(sensorName) : LooksLikeGpuSensor(sensorName);
+          if (!domainMatch)
+            continue;
+
+          if (reading.Celsius > bestGeneral) {
+            bestGeneral = reading.Celsius;
+            bestGeneralName = sensorName;
+          }
+
+          bool preferredMatch = preferCpu
+            ? ContainsAnyKeyword(sensorName, CpuPreferredSensorKeywords)
+            : ContainsAnyKeyword(sensorName, GpuPreferredSensorKeywords);
+          if (!preferredMatch)
+            continue;
+
+          if (reading.Celsius > bestPreferred) {
+            bestPreferred = reading.Celsius;
+            bestPreferredName = sensorName;
+          }
+        }
+      }
+
+      if (bestPreferredName != null) {
+        source = bestPreferredName;
+        return bestPreferred;
+      }
+
+      if (bestGeneralName != null) {
+        source = bestGeneralName;
+        return bestGeneral;
+      }
+
+      source = "fallback";
+      return fallback;
     }
 
     static void LoadDefaultFanConfig(string filePath, float silentCoef) {
@@ -1551,12 +1827,34 @@ namespace OmenSuperHub {
         SmartPowerControlEnabled = smartPowerControlEnabled,
         SmartPowerControlState = smartPowerControlState,
         SmartPowerControlReason = smartPowerControlReason,
+        ControlCpuTemperature = controlCpuTemperatureC,
+        ControlGpuTemperature = controlGpuTemperatureC,
+        ControlCpuSensor = controlCpuSensorName,
+        ControlGpuSensor = controlGpuSensorName,
         EstimatedSystemPowerWatts = estimatedSystemPowerWatts,
         TargetSystemPowerWatts = targetSystemPowerWatts,
         SmartCpuLimitWatts = smartCpuLimitWatts,
         SmartGpuTier = smartGpuTier,
-        SmartFanBoostActive = smartFanBoostActive
+        SmartFanBoostActive = smartFanBoostActive,
+        TemperatureSensors = GetTemperatureSensorSnapshot()
       };
+    }
+
+    static List<TemperatureSensorReading> GetTemperatureSensorSnapshot() {
+      lock (temperatureSensorsLock) {
+        var snapshot = new List<TemperatureSensorReading>(currentTemperatureSensors.Count);
+        foreach (var reading in currentTemperatureSensors) {
+          if (reading == null) {
+            continue;
+          }
+
+          snapshot.Add(new TemperatureSensorReading {
+            Name = reading.Name,
+            Celsius = reading.Celsius
+          });
+        }
+        return snapshot;
+      }
     }
 
     static void ShowMainWindow() {

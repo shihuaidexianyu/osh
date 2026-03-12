@@ -2,6 +2,11 @@ using System.Collections.Generic;
 using static OmenSuperHub.OmenHardware;
 
 namespace OmenSuperHub {
+  internal sealed class TemperatureSensorReading {
+    public string Name { get; set; }
+    public float Celsius { get; set; }
+  }
+
   internal sealed class BatteryTelemetry {
     public bool PowerOnline { get; set; }
     public bool Charging { get; set; }
@@ -41,10 +46,15 @@ namespace OmenSuperHub {
     public bool SmartPowerControlEnabled { get; set; }
     public string SmartPowerControlState { get; set; }
     public string SmartPowerControlReason { get; set; }
+    public float ControlCpuTemperature { get; set; }
+    public float ControlGpuTemperature { get; set; }
+    public string ControlCpuSensor { get; set; }
+    public string ControlGpuSensor { get; set; }
     public float EstimatedSystemPowerWatts { get; set; }
     public float TargetSystemPowerWatts { get; set; }
     public int SmartCpuLimitWatts { get; set; }
     public string SmartGpuTier { get; set; }
     public bool SmartFanBoostActive { get; set; }
+    public List<TemperatureSensorReading> TemperatureSensors { get; set; }
   }
 }

@@ -577,16 +577,7 @@ namespace OmenSuperHub {
           break;
       }
 
-      trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("打开控制台", null, (s, e) => {
-        ShowMainWindow();
-      }, false));
-      trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("显示/隐藏浮窗", null, (s, e) => {
-        ApplyFloatingBarSetting(floatingBar != "on");
-      }, false));
-      trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("关于OSH", null, (s, e) => {
-        MainForm.Instance.ShowHelpSection();
-      }, false));
-      trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
+      // Keep tray menu minimal: only "Exit".
       trayIcon.ContextMenuStrip.Items.Add(CreateMenuItem("退出", null, (s, e) => Exit(), false));
 
       // Initialize tooltip update timer

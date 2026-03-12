@@ -43,6 +43,7 @@ namespace OmenSuperHub {
 
     Window window;
     DispatcherTimer refreshTimer;
+    DispatcherTimer tuningApplyTimer;
     bool syncingControlState;
 
     TextBlock totalPowerText;
@@ -60,6 +61,36 @@ namespace OmenSuperHub {
     TextBlock capabilitiesText;
     TextBlock keyboardText;
     TextBlock fanTypeText;
+    Border smartStateBadge;
+    TextBlock smartStateText;
+    TextBlock smartReasonText;
+    ProgressBar smartBudgetBar;
+    TextBlock smartBudgetText;
+    ProgressBar smartCpuTempBar;
+    TextBlock smartCpuTempText;
+    ProgressBar smartGpuTempBar;
+    TextBlock smartGpuTempText;
+    TextBlock smartActionText;
+    Slider cpuEmergencySlider;
+    Slider gpuEmergencySlider;
+    Slider cpuRecoverSlider;
+    Slider gpuRecoverSlider;
+    Slider cpuFanBoostOnSlider;
+    Slider gpuFanBoostOnSlider;
+    Slider cpuFanBoostOffSlider;
+    Slider gpuFanBoostOffSlider;
+    Slider batteryGuardTriggerSlider;
+    Slider batteryGuardReleaseSlider;
+    TextBlock cpuEmergencyValueText;
+    TextBlock gpuEmergencyValueText;
+    TextBlock cpuRecoverValueText;
+    TextBlock gpuRecoverValueText;
+    TextBlock cpuFanBoostOnValueText;
+    TextBlock gpuFanBoostOnValueText;
+    TextBlock cpuFanBoostOffValueText;
+    TextBlock gpuFanBoostOffValueText;
+    TextBlock batteryGuardTriggerValueText;
+    TextBlock batteryGuardReleaseValueText;
 
     ComboBox fanModeComboBox;
     ComboBox fanControlComboBox;
@@ -183,6 +214,14 @@ namespace OmenSuperHub {
       };
       refreshTimer.Tick += (s, e) => RefreshDashboard();
       refreshTimer.Start();
+
+      tuningApplyTimer = new DispatcherTimer {
+        Interval = TimeSpan.FromMilliseconds(350)
+      };
+      tuningApplyTimer.Tick += (s, e) => {
+        tuningApplyTimer.Stop();
+        ApplyPowerTuningFromSliders();
+      };
     }
 
     void BuildLayout() {
@@ -217,6 +256,8 @@ namespace OmenSuperHub {
       rightStack.Children.Add(BuildHeaderPanel());
       rightStack.Children.Add(BuildCoolingPanel());
       rightStack.Children.Add(BuildPerformancePanel());
+      rightStack.Children.Add(BuildSmartPowerPanel());
+      rightStack.Children.Add(BuildStrategyTuningPanel());
       rightStack.Children.Add(BuildOverlayPanel());
       rightStack.Children.Add(BuildStatusPanel());
       rightStack.Children.Add(BuildDetailsPanel());
@@ -316,6 +357,8 @@ namespace OmenSuperHub {
       stack.Children.Add(CreateSectionSubtitle("主页面按功能分组布局"));
       stack.Children.Add(CreateNavTag("散热与风扇"));
       stack.Children.Add(CreateNavTag("功耗与性能"));
+      stack.Children.Add(CreateNavTag("智能功耗"));
+      stack.Children.Add(CreateNavTag("策略参数"));
       stack.Children.Add(CreateNavTag("浮窗与显示"));
       stack.Children.Add(CreateNavTag("硬件状态"));
       stack.Children.Add(CreateNavTag("实时详情"));
@@ -421,7 +464,7 @@ namespace OmenSuperHub {
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
       gpuClockComboBox = CreateComboBox(gpuClockItems, GpuClockComboBox_SelectionChanged);
       smartPowerControlCheckBox = new CheckBox {
-        Content = "启用智能功耗控制（Balanced + Emergency）",
+        Content = "启用智能功耗控制（Eco / Balanced / Performance / Protect）",
         Foreground = strongText,
         FontSize = 14,
         Margin = new Thickness(0, 6, 0, 8),
@@ -435,6 +478,162 @@ namespace OmenSuperHub {
       AddControlRow(grid, 3, "GPU 锁频", gpuClockComboBox);
       AddControlRow(grid, 4, "智能控制", smartPowerControlCheckBox);
       card.Child = grid;
+      return card;
+    }
+
+    Border BuildSmartPowerPanel() {
+      var card = CreateCard(250);
+
+      var root = new Grid();
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+      var titleWrap = new StackPanel();
+      titleWrap.Children.Add(CreateSectionTitle("智能功耗"));
+      titleWrap.Children.Add(CreateSectionSubtitle("实时状态、预算占用和温度保护可视化。"));
+      Grid.SetRow(titleWrap, 0);
+      root.Children.Add(titleWrap);
+
+      var stateRow = new Grid {
+        Margin = new Thickness(0, 0, 0, 10)
+      };
+      stateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+      stateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+      smartStateText = new TextBlock {
+        Text = "BALANCED",
+        Foreground = Brushes.White,
+        FontSize = 12,
+        FontWeight = FontWeights.Bold
+      };
+      smartStateBadge = new Border {
+        Background = accentBlue,
+        CornerRadius = new CornerRadius(999),
+        Padding = new Thickness(12, 4, 12, 4),
+        Child = smartStateText,
+        Margin = new Thickness(0, 0, 12, 0),
+        VerticalAlignment = VerticalAlignment.Center
+      };
+      smartReasonText = new TextBlock {
+        Text = "--",
+        Foreground = mutedText,
+        FontSize = 13,
+        VerticalAlignment = VerticalAlignment.Center,
+        TextTrimming = TextTrimming.CharacterEllipsis
+      };
+
+      Grid.SetColumn(smartStateBadge, 0);
+      Grid.SetColumn(smartReasonText, 1);
+      stateRow.Children.Add(smartStateBadge);
+      stateRow.Children.Add(smartReasonText);
+      Grid.SetRow(stateRow, 1);
+      root.Children.Add(stateRow);
+
+      var budgetWrap = new StackPanel {
+        Margin = new Thickness(0, 0, 0, 10)
+      };
+      smartBudgetText = new TextBlock {
+        Text = "预算 -- / -- W",
+        Foreground = strongText,
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(0, 0, 0, 4)
+      };
+      smartBudgetBar = new ProgressBar {
+        Height = 10,
+        Minimum = 0,
+        Maximum = 100,
+        Value = 0,
+        Foreground = accentGreen,
+        Background = subtleFill
+      };
+      budgetWrap.Children.Add(smartBudgetText);
+      budgetWrap.Children.Add(smartBudgetBar);
+      Grid.SetRow(budgetWrap, 2);
+      root.Children.Add(budgetWrap);
+
+      var thermalGrid = new Grid {
+        Margin = new Thickness(0, 0, 0, 10)
+      };
+      thermalGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      thermalGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+      var cpuThermal = CreateThermalMetric("CPU 温度", out smartCpuTempText, out smartCpuTempBar);
+      var gpuThermal = CreateThermalMetric("GPU 温度", out smartGpuTempText, out smartGpuTempBar);
+      Grid.SetColumn(cpuThermal, 0);
+      Grid.SetColumn(gpuThermal, 1);
+      thermalGrid.Children.Add(cpuThermal);
+      thermalGrid.Children.Add(gpuThermal);
+      Grid.SetRow(thermalGrid, 3);
+      root.Children.Add(thermalGrid);
+
+      smartActionText = new TextBlock {
+        Text = "CPU -- | GPU -- | FanBoost --",
+        Foreground = strongText,
+        FontSize = 13,
+        TextWrapping = TextWrapping.Wrap
+      };
+      Grid.SetRow(smartActionText, 4);
+      root.Children.Add(smartActionText);
+
+      card.Child = root;
+      return card;
+    }
+
+    Border BuildStrategyTuningPanel() {
+      var card = CreateCard(360);
+      var root = new Grid();
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+      var titleWrap = new StackPanel();
+      titleWrap.Children.Add(CreateSectionTitle("策略参数"));
+      titleWrap.Children.Add(CreateSectionSubtitle("调节温度与电池守卫阈值（滑块实时生效）。"));
+      Grid.SetRow(titleWrap, 0);
+      root.Children.Add(titleWrap);
+
+      var slidersWrap = new StackPanel {
+        Margin = new Thickness(0, 4, 0, 4)
+      };
+      slidersWrap.Children.Add(CreateThresholdSliderRow("CPU 保护温度", 85, 102, 1, out cpuEmergencySlider, out cpuEmergencyValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("GPU 保护温度", 78, 95, 1, out gpuEmergencySlider, out gpuEmergencyValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("CPU 恢复温度", 70, 99, 1, out cpuRecoverSlider, out cpuRecoverValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("GPU 恢复温度", 65, 92, 1, out gpuRecoverSlider, out gpuRecoverValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("CPU 风扇增强开", 75, 100, 1, out cpuFanBoostOnSlider, out cpuFanBoostOnValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("GPU 风扇增强开", 70, 95, 1, out gpuFanBoostOnSlider, out gpuFanBoostOnValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("CPU 风扇增强关", 65, 98, 1, out cpuFanBoostOffSlider, out cpuFanBoostOffValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("GPU 风扇增强关", 60, 90, 1, out gpuFanBoostOffSlider, out gpuFanBoostOffValueText, "°C"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("电池守卫触发", 30, 100, 1, out batteryGuardTriggerSlider, out batteryGuardTriggerValueText, "W"));
+      slidersWrap.Children.Add(CreateThresholdSliderRow("电池守卫释放", 20, 90, 1, out batteryGuardReleaseSlider, out batteryGuardReleaseValueText, "W"));
+
+      Grid.SetRow(slidersWrap, 1);
+      root.Children.Add(slidersWrap);
+
+      var actions = new StackPanel {
+        Orientation = Orientation.Horizontal,
+        HorizontalAlignment = HorizontalAlignment.Left,
+        Margin = new Thickness(0, 8, 0, 0)
+      };
+      var resetButton = new Button {
+        Content = "恢复默认",
+        Padding = new Thickness(12, 6, 12, 6),
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = strongText,
+        Background = subtleFill,
+        BorderBrush = borderColor
+      };
+      resetButton.Click += ResetTuningButton_Click;
+      actions.Children.Add(resetButton);
+
+      Grid.SetRow(actions, 2);
+      root.Children.Add(actions);
+
+      card.Child = root;
       return card;
     }
 
@@ -545,6 +744,85 @@ namespace OmenSuperHub {
       var grid = new Grid();
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      return grid;
+    }
+
+    FrameworkElement CreateThermalMetric(string title, out TextBlock valueText, out ProgressBar progressBar) {
+      var wrap = new StackPanel {
+        Margin = new Thickness(0, 0, 10, 0)
+      };
+
+      var titleText = new TextBlock {
+        Text = title,
+        Foreground = mutedText,
+        FontSize = 12
+      };
+      valueText = new TextBlock {
+        Text = "--",
+        Foreground = strongText,
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(0, 2, 0, 4)
+      };
+      progressBar = new ProgressBar {
+        Height = 8,
+        Minimum = 0,
+        Maximum = 100,
+        Value = 0,
+        Foreground = accentBlue,
+        Background = subtleFill
+      };
+
+      wrap.Children.Add(titleText);
+      wrap.Children.Add(valueText);
+      wrap.Children.Add(progressBar);
+      return wrap;
+    }
+
+    FrameworkElement CreateThresholdSliderRow(string title, double min, double max, double tick, out Slider slider, out TextBlock valueText, string unit) {
+      var grid = new Grid {
+        Margin = new Thickness(0, 0, 0, 8)
+      };
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+      var label = new TextBlock {
+        Text = title,
+        Foreground = mutedText,
+        FontSize = 13,
+        VerticalAlignment = VerticalAlignment.Center
+      };
+
+      slider = new Slider {
+        Minimum = min,
+        Maximum = max,
+        TickFrequency = tick,
+        SmallChange = tick,
+        LargeChange = tick * 3,
+        IsSnapToTickEnabled = true,
+        Value = min,
+        Margin = new Thickness(8, 0, 10, 0)
+      };
+      slider.Tag = unit;
+      slider.ValueChanged += StrategySlider_ValueChanged;
+
+      valueText = new TextBlock {
+        Text = $"{min:F0} {unit}",
+        Foreground = strongText,
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Width = 68,
+        TextAlignment = TextAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Center
+      };
+
+      Grid.SetColumn(label, 0);
+      Grid.SetColumn(slider, 1);
+      Grid.SetColumn(valueText, 2);
+      grid.Children.Add(label);
+      grid.Children.Add(slider);
+      grid.Children.Add(valueText);
       return grid;
     }
 
@@ -694,6 +972,7 @@ namespace OmenSuperHub {
       capabilitiesText.Text = BuildCapabilitiesSummary(snapshot);
       keyboardText.Text = FormatKeyboardType(snapshot.KeyboardType);
       fanTypeText.Text = snapshot.FanTypeInfo == null ? "Unknown" : $"{snapshot.FanTypeInfo.Fan1Type}/{snapshot.FanTypeInfo.Fan2Type}";
+      UpdateSmartPowerVisual(snapshot);
 
       telemetryTextBox.Text = BuildTelemetryText(snapshot);
       configTextBox.Text = BuildConfigText(snapshot);
@@ -727,6 +1006,7 @@ namespace OmenSuperHub {
         SelectComboItem(gpuPowerComboBox, ConvertGpuPowerValue(snapshot.GpuPowerSetting));
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
         smartPowerControlCheckBox.IsChecked = snapshot.SmartPowerControlEnabled;
+        SyncPowerTuningControls();
 
         bool overlayEnabled = snapshot.FloatingBarEnabled;
       floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
@@ -829,6 +1109,110 @@ namespace OmenSuperHub {
       RefreshDashboard();
     }
 
+    void StrategySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) {
+      if (sender is Slider slider) {
+        UpdateThresholdValueText(slider);
+      }
+
+      if (syncingControlState || tuningApplyTimer == null) {
+        return;
+      }
+
+      tuningApplyTimer.Stop();
+      tuningApplyTimer.Start();
+    }
+
+    void UpdateThresholdValueText(Slider slider) {
+      if (slider == null) {
+        return;
+      }
+
+      string unit = slider.Tag as string ?? string.Empty;
+      string text = $"{slider.Value:F0} {unit}";
+      if (slider == cpuEmergencySlider && cpuEmergencyValueText != null) cpuEmergencyValueText.Text = text;
+      else if (slider == gpuEmergencySlider && gpuEmergencyValueText != null) gpuEmergencyValueText.Text = text;
+      else if (slider == cpuRecoverSlider && cpuRecoverValueText != null) cpuRecoverValueText.Text = text;
+      else if (slider == gpuRecoverSlider && gpuRecoverValueText != null) gpuRecoverValueText.Text = text;
+      else if (slider == cpuFanBoostOnSlider && cpuFanBoostOnValueText != null) cpuFanBoostOnValueText.Text = text;
+      else if (slider == gpuFanBoostOnSlider && gpuFanBoostOnValueText != null) gpuFanBoostOnValueText.Text = text;
+      else if (slider == cpuFanBoostOffSlider && cpuFanBoostOffValueText != null) cpuFanBoostOffValueText.Text = text;
+      else if (slider == gpuFanBoostOffSlider && gpuFanBoostOffValueText != null) gpuFanBoostOffValueText.Text = text;
+      else if (slider == batteryGuardTriggerSlider && batteryGuardTriggerValueText != null) batteryGuardTriggerValueText.Text = text;
+      else if (slider == batteryGuardReleaseSlider && batteryGuardReleaseValueText != null) batteryGuardReleaseValueText.Text = text;
+    }
+
+    void SyncPowerTuningControls() {
+      var tuning = Program.GetPowerControlTuningSnapshot();
+      if (tuning == null) {
+        return;
+      }
+
+      if (cpuEmergencySlider == null) {
+        return;
+      }
+
+      cpuEmergencySlider.Value = tuning.CpuEmergencyTempC;
+      gpuEmergencySlider.Value = tuning.GpuEmergencyTempC;
+      cpuRecoverSlider.Value = tuning.CpuRecoverTempC;
+      gpuRecoverSlider.Value = tuning.GpuRecoverTempC;
+      cpuFanBoostOnSlider.Value = tuning.CpuFanBoostOnTempC;
+      gpuFanBoostOnSlider.Value = tuning.GpuFanBoostOnTempC;
+      cpuFanBoostOffSlider.Value = tuning.CpuFanBoostOffTempC;
+      gpuFanBoostOffSlider.Value = tuning.GpuFanBoostOffTempC;
+      batteryGuardTriggerSlider.Value = tuning.BatteryGuardTriggerWatts;
+      batteryGuardReleaseSlider.Value = tuning.BatteryGuardReleaseWatts;
+
+      UpdateThresholdValueText(cpuEmergencySlider);
+      UpdateThresholdValueText(gpuEmergencySlider);
+      UpdateThresholdValueText(cpuRecoverSlider);
+      UpdateThresholdValueText(gpuRecoverSlider);
+      UpdateThresholdValueText(cpuFanBoostOnSlider);
+      UpdateThresholdValueText(gpuFanBoostOnSlider);
+      UpdateThresholdValueText(cpuFanBoostOffSlider);
+      UpdateThresholdValueText(gpuFanBoostOffSlider);
+      UpdateThresholdValueText(batteryGuardTriggerSlider);
+      UpdateThresholdValueText(batteryGuardReleaseSlider);
+    }
+
+    void ApplyPowerTuningFromSliders() {
+      if (cpuEmergencySlider == null) {
+        return;
+      }
+
+      var tuning = new PowerControlTuning {
+        CpuEmergencyTempC = (float)cpuEmergencySlider.Value,
+        GpuEmergencyTempC = (float)gpuEmergencySlider.Value,
+        CpuRecoverTempC = (float)cpuRecoverSlider.Value,
+        GpuRecoverTempC = (float)gpuRecoverSlider.Value,
+        CpuFanBoostOnTempC = (float)cpuFanBoostOnSlider.Value,
+        GpuFanBoostOnTempC = (float)gpuFanBoostOnSlider.Value,
+        CpuFanBoostOffTempC = (float)cpuFanBoostOffSlider.Value,
+        GpuFanBoostOffTempC = (float)gpuFanBoostOffSlider.Value,
+        BatteryGuardTriggerWatts = (float)batteryGuardTriggerSlider.Value,
+        BatteryGuardReleaseWatts = (float)batteryGuardReleaseSlider.Value
+      };
+
+      Program.ApplyPowerControlTuning(tuning);
+
+      syncingControlState = true;
+      try {
+        SyncPowerTuningControls();
+      } finally {
+        syncingControlState = false;
+      }
+    }
+
+    void ResetTuningButton_Click(object sender, RoutedEventArgs e) {
+      Program.ResetPowerControlTuningToDefault();
+      syncingControlState = true;
+      try {
+        SyncPowerTuningControls();
+      } finally {
+        syncingControlState = false;
+      }
+      RefreshDashboard();
+    }
+
     void ApplyManualFanFromSlider(bool force = false) {
       if (manualFanRpmSlider == null) {
         return;
@@ -872,6 +1256,157 @@ namespace OmenSuperHub {
       return rpm - (rpm % ManualFanStepRpm);
     }
 
+    void UpdateSmartPowerVisual(DashboardSnapshot snapshot) {
+      if (snapshot == null) {
+        return;
+      }
+
+      string state = snapshot.SmartPowerControlEnabled ? (snapshot.SmartPowerControlState ?? "balanced") : "manual";
+      if (smartStateText != null) {
+        smartStateText.Text = FormatSmartStateLabel(state);
+      }
+      if (smartReasonText != null) {
+        smartReasonText.Text = $"原因: {FormatSmartReason(snapshot.SmartPowerControlReason)}";
+      }
+      if (smartStateBadge != null) {
+        smartStateBadge.Background = GetSmartStateBrush(state);
+      }
+
+      float estimated = snapshot.EstimatedSystemPowerWatts > 0 ? snapshot.EstimatedSystemPowerWatts : snapshot.CpuPowerWatts + snapshot.GpuPowerWatts;
+      float target = snapshot.TargetSystemPowerWatts > 1f ? snapshot.TargetSystemPowerWatts : Math.Max(30f, estimated);
+      float delta = estimated - target;
+      if (smartBudgetText != null) {
+        smartBudgetText.Text = $"预算 {estimated:F1} / {target:F1} W ({delta:+0.0;-0.0;0.0})";
+        smartBudgetText.Foreground = delta > 3f ? accentOrange : strongText;
+      }
+      if (smartBudgetBar != null) {
+        double max = Math.Max(100d, Math.Max(target * 1.35d, estimated + 8d));
+        smartBudgetBar.Maximum = max;
+        smartBudgetBar.Value = ClampDouble(estimated, 0d, max);
+        smartBudgetBar.Foreground = delta > 3f ? accentOrange : accentGreen;
+      }
+
+      if (smartCpuTempText != null) {
+        smartCpuTempText.Text = $"{snapshot.CpuTemperature:F1} °C";
+      }
+      if (smartCpuTempBar != null) {
+        smartCpuTempBar.Value = ClampDouble(snapshot.CpuTemperature, 0d, 100d);
+        smartCpuTempBar.Foreground = snapshot.CpuTemperature >= 90f ? accentOrange : accentBlue;
+      }
+
+      if (snapshot.MonitorGpu) {
+        if (smartGpuTempText != null) {
+          smartGpuTempText.Text = $"{snapshot.GpuTemperature:F1} °C";
+          smartGpuTempText.Foreground = strongText;
+        }
+        if (smartGpuTempBar != null) {
+          smartGpuTempBar.IsEnabled = true;
+          smartGpuTempBar.Value = ClampDouble(snapshot.GpuTemperature, 0d, 100d);
+          smartGpuTempBar.Foreground = snapshot.GpuTemperature >= 84f ? accentOrange : accentBlue;
+        }
+      } else {
+        if (smartGpuTempText != null) {
+          smartGpuTempText.Text = "监控关闭";
+          smartGpuTempText.Foreground = mutedText;
+        }
+        if (smartGpuTempBar != null) {
+          smartGpuTempBar.IsEnabled = false;
+          smartGpuTempBar.Value = 0;
+        }
+      }
+
+      if (smartActionText != null) {
+        smartActionText.Text =
+          $"CPU 上限 {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts}W" : "--")} | " +
+          $"GPU 档位 {FormatGpuTier(snapshot.SmartGpuTier)} | " +
+          $"FanBoost {(snapshot.SmartFanBoostActive ? "开启" : "关闭")}";
+      }
+    }
+
+    string FormatSmartStateLabel(string state) {
+      switch ((state ?? string.Empty).ToLowerInvariant()) {
+        case "eco":
+          return "ECO";
+        case "performance":
+          return "PERFORMANCE";
+        case "thermal_protect":
+          return "THERMAL PROTECT";
+        case "battery_guard":
+          return "BATTERY GUARD";
+        case "manual":
+          return "MANUAL";
+        default:
+          return "BALANCED";
+      }
+    }
+
+    string FormatSmartReason(string reason) {
+      if (string.IsNullOrWhiteSpace(reason)) {
+        return "--";
+      }
+
+      switch (reason) {
+        case "thermal-ceiling":
+          return "温度触顶保护";
+        case "battery-discharge":
+          return "电池放电保护";
+        case "promote-performance":
+          return "性能窗口放宽";
+        case "performance-window":
+          return "处于性能窗口";
+        case "power-saving":
+          return "节能降载";
+        case "budget-limit":
+          return "超出预算";
+        case "eco-stable":
+          return "节能稳定";
+        case "state-stabilizing":
+          return "状态稳定期";
+        case "balanced-stable":
+          return "平衡稳定";
+        case "disabled":
+          return "已关闭";
+        default:
+          return reason;
+      }
+    }
+
+    string FormatGpuTier(string tier) {
+      switch ((tier ?? string.Empty).ToLowerInvariant()) {
+        case "max":
+          return "高";
+        case "med":
+          return "中";
+        case "min":
+          return "低";
+        default:
+          return tier ?? "--";
+      }
+    }
+
+    Brush GetSmartStateBrush(string state) {
+      switch ((state ?? string.Empty).ToLowerInvariant()) {
+        case "eco":
+          return accentGreen;
+        case "performance":
+          return accentBlue;
+        case "thermal_protect":
+          return accentOrange;
+        case "battery_guard":
+          return new SolidColorBrush(Color.FromRgb(151, 99, 8));
+        case "manual":
+          return mutedText;
+        default:
+          return new SolidColorBrush(Color.FromRgb(72, 98, 130));
+      }
+    }
+
+    static double ClampDouble(double value, double min, double max) {
+      if (value < min) return min;
+      if (value > max) return max;
+      return value;
+    }
+
     string BuildBatterySummary(DashboardSnapshot snapshot) {
       if (snapshot.Battery == null) return "Battery --";
       float? power = GetBatteryPowerWatts(snapshot.Battery);
@@ -909,8 +1444,8 @@ namespace OmenSuperHub {
         $"CPU Limit      : {(snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting)}",
         $"GPU Policy     : {ConvertGpuPowerValue(snapshot.GpuPowerSetting)}",
         $"GPU Clock      : {(snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原")}",
-        $"Smart Power    : {(snapshot.SmartPowerControlEnabled ? "Enabled" : "Disabled")} ({snapshot.SmartPowerControlState})",
-        $"Smart Reason   : {snapshot.SmartPowerControlReason}",
+        $"Smart Power    : {(snapshot.SmartPowerControlEnabled ? "Enabled" : "Disabled")} ({FormatSmartStateLabel(snapshot.SmartPowerControlState)})",
+        $"Smart Reason   : {FormatSmartReason(snapshot.SmartPowerControlReason)}",
         $"Smart CPU Cap  : {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts} W" : "--")}",
         $"Smart GPU Tier : {snapshot.SmartGpuTier}",
         $"Smart FanBoost : {(snapshot.SmartFanBoostActive ? "On" : "Off")}",

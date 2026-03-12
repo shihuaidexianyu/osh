@@ -153,6 +153,31 @@ namespace OmenSuperHub {
       SaveConfig("SmartPowerControl");
     }
 
+    internal static PowerControlTuning GetPowerControlTuningSnapshot() {
+      lock (powerControlLock) {
+        return powerController.GetTuningSnapshot();
+      }
+    }
+
+    internal static PowerControlTuning GetDefaultPowerControlTuning() {
+      return PowerController.CreateDefaultTuning();
+    }
+
+    internal static void ApplyPowerControlTuning(PowerControlTuning tuning) {
+      if (tuning == null) {
+        return;
+      }
+
+      lock (powerControlLock) {
+        powerController.UpdateTuning(tuning);
+      }
+      SavePowerControlTuning();
+    }
+
+    internal static void ResetPowerControlTuningToDefault() {
+      ApplyPowerControlTuning(GetDefaultPowerControlTuning());
+    }
+
     [DllImport("user32.dll")]
     static extern bool SetProcessDPIAware();
 
@@ -658,7 +683,8 @@ namespace OmenSuperHub {
             GpuTemperatureC = GPUTemp,
             GpuPowerWatts = GPUPower,
             BaseSystemPowerWatts = powerOnline ? (monitorGPU ? 14f : 11f) : (monitorGPU ? 10f : 8f),
-            BatteryDischargePowerWatts = batteryDischarge
+            BatteryDischargePowerWatts = batteryDischarge,
+            BatteryPercent = (int)Math.Round(SystemInformation.PowerStatus.BatteryLifePercent * 100f)
           };
 
           PowerControlDecision decision = powerController.Evaluate(input);
@@ -1722,6 +1748,75 @@ namespace OmenSuperHub {
       return (int)interpolatedSpeed;
     }
 
+    static void SavePowerControlTuning() {
+      try {
+        PowerControlTuning tuning;
+        lock (powerControlLock) {
+          tuning = powerController.GetTuningSnapshot();
+        }
+
+        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\OmenSuperHub")) {
+          if (key == null) {
+            return;
+          }
+
+          key.SetValue("SPT_CpuEmergencyTempC", tuning.CpuEmergencyTempC, RegistryValueKind.String);
+          key.SetValue("SPT_GpuEmergencyTempC", tuning.GpuEmergencyTempC, RegistryValueKind.String);
+          key.SetValue("SPT_CpuRecoverTempC", tuning.CpuRecoverTempC, RegistryValueKind.String);
+          key.SetValue("SPT_GpuRecoverTempC", tuning.GpuRecoverTempC, RegistryValueKind.String);
+          key.SetValue("SPT_CpuFanBoostOnTempC", tuning.CpuFanBoostOnTempC, RegistryValueKind.String);
+          key.SetValue("SPT_GpuFanBoostOnTempC", tuning.GpuFanBoostOnTempC, RegistryValueKind.String);
+          key.SetValue("SPT_CpuFanBoostOffTempC", tuning.CpuFanBoostOffTempC, RegistryValueKind.String);
+          key.SetValue("SPT_GpuFanBoostOffTempC", tuning.GpuFanBoostOffTempC, RegistryValueKind.String);
+          key.SetValue("SPT_BatteryGuardTriggerWatts", tuning.BatteryGuardTriggerWatts, RegistryValueKind.String);
+          key.SetValue("SPT_BatteryGuardReleaseWatts", tuning.BatteryGuardReleaseWatts, RegistryValueKind.String);
+        }
+      } catch (Exception ex) {
+        Console.WriteLine($"Error saving power tuning: {ex.Message}");
+      }
+    }
+
+    static void LoadPowerControlTuning(RegistryKey key) {
+      var defaults = PowerController.CreateDefaultTuning();
+      var tuning = defaults.Clone();
+
+      if (key != null) {
+        tuning.CpuEmergencyTempC = ReadRegistryFloat(key, "SPT_CpuEmergencyTempC", defaults.CpuEmergencyTempC);
+        tuning.GpuEmergencyTempC = ReadRegistryFloat(key, "SPT_GpuEmergencyTempC", defaults.GpuEmergencyTempC);
+        tuning.CpuRecoverTempC = ReadRegistryFloat(key, "SPT_CpuRecoverTempC", defaults.CpuRecoverTempC);
+        tuning.GpuRecoverTempC = ReadRegistryFloat(key, "SPT_GpuRecoverTempC", defaults.GpuRecoverTempC);
+        tuning.CpuFanBoostOnTempC = ReadRegistryFloat(key, "SPT_CpuFanBoostOnTempC", defaults.CpuFanBoostOnTempC);
+        tuning.GpuFanBoostOnTempC = ReadRegistryFloat(key, "SPT_GpuFanBoostOnTempC", defaults.GpuFanBoostOnTempC);
+        tuning.CpuFanBoostOffTempC = ReadRegistryFloat(key, "SPT_CpuFanBoostOffTempC", defaults.CpuFanBoostOffTempC);
+        tuning.GpuFanBoostOffTempC = ReadRegistryFloat(key, "SPT_GpuFanBoostOffTempC", defaults.GpuFanBoostOffTempC);
+        tuning.BatteryGuardTriggerWatts = ReadRegistryFloat(key, "SPT_BatteryGuardTriggerWatts", defaults.BatteryGuardTriggerWatts);
+        tuning.BatteryGuardReleaseWatts = ReadRegistryFloat(key, "SPT_BatteryGuardReleaseWatts", defaults.BatteryGuardReleaseWatts);
+      }
+
+      lock (powerControlLock) {
+        powerController.UpdateTuning(tuning);
+      }
+    }
+
+    static float ReadRegistryFloat(RegistryKey key, string valueName, float fallback) {
+      object raw = key.GetValue(valueName, null);
+      if (raw == null) {
+        return fallback;
+      }
+
+      try {
+        return Convert.ToSingle(raw);
+      } catch {
+      }
+
+      float parsed;
+      if (float.TryParse(raw.ToString(), out parsed)) {
+        return parsed;
+      }
+
+      return fallback;
+    }
+
     static void SaveConfig(string configName = null) {
       try {
         using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\OmenSuperHub")) {
@@ -1987,6 +2082,7 @@ namespace OmenSuperHub {
               smartPowerControlReason = "disabled";
               smartFanBoostActive = false;
             }
+            LoadPowerControlTuning(key);
 
             textSize = (int)key.GetValue("FloatingBarSize", 48);
             UpdateFloatingText();
@@ -2024,6 +2120,7 @@ namespace OmenSuperHub {
             SetFanMode(0x31);
             SetMaxFanSpeedOff();
             SetMaxGpuPower();
+            LoadPowerControlTuning(null);
           }
         }
       } catch (Exception ex) {

@@ -243,7 +243,6 @@ namespace OmenSuperHub {
 
       leftStack.Children.Add(CreateSidebarBrandCard());
       leftStack.Children.Add(CreateSidebarSummaryCard());
-      leftStack.Children.Add(CreateSidebarNavCard());
 
       var rightScroll = new ScrollViewer {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -348,31 +347,6 @@ namespace OmenSuperHub {
       stack.Children.Add(leftModeText);
       card.Child = stack;
       return card;
-    }
-
-    Border CreateSidebarNavCard() {
-      var card = CreateCard(210);
-      var stack = new StackPanel();
-      stack.Children.Add(CreateSectionTitle("设置分类"));
-      stack.Children.Add(CreateSectionSubtitle("主页面按功能分组布局"));
-      stack.Children.Add(CreateNavTag("散热与风扇"));
-      stack.Children.Add(CreateNavTag("功耗与性能"));
-      stack.Children.Add(CreateNavTag("智能功耗"));
-      stack.Children.Add(CreateNavTag("策略参数"));
-      stack.Children.Add(CreateNavTag("浮窗与显示"));
-      stack.Children.Add(CreateNavTag("硬件状态"));
-      stack.Children.Add(CreateNavTag("实时详情"));
-      card.Child = stack;
-      return card;
-    }
-
-    TextBlock CreateNavTag(string text) {
-      return new TextBlock {
-        Text = text,
-        Foreground = mutedText,
-        FontSize = 14,
-        Margin = new Thickness(0, 0, 0, 8)
-      };
     }
 
     Border BuildHeaderPanel() {

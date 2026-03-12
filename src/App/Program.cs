@@ -2214,47 +2214,27 @@ namespace OmenSuperHub {
     //生成监控信息
     static string monitorText() {
       List<string> lines = new List<string>();
-      lines.Add($"CPU: {CPUTemp:F1}°C, {CPUPower:F1}W");
+      lines.Add($"CPU: {CPUTemp:F1}°C  {CPUPower:F1}W");
 
       if (monitorGPU)
-        lines.Add($"GPU: {GPUTemp:F1}°C, {GPUPower:F1}W");
+        lines.Add($"GPU: {GPUTemp:F1}°C  {GPUPower:F1}W");
 
-      if (currentBatteryTelemetry != null) {
+      float systemPower = CPUPower + (monitorGPU ? GPUPower : 0f);
+      string source = powerOnline ? "AC" : "BAT";
+      if (!powerOnline && currentBatteryTelemetry != null) {
         float? batteryWatts = GetBatteryPowerWatts(currentBatteryTelemetry);
-        string batteryLine = $"Battery: {FormatBatteryMode(currentBatteryTelemetry)}";
-        if (batteryWatts.HasValue)
-          batteryLine += $", {batteryWatts.Value:F1}W";
-        if (currentBatteryTelemetry.RemainingCapacityMilliwattHours > 0)
-          batteryLine += $", {currentBatteryTelemetry.RemainingCapacityMilliwattHours / 1000f:F1}Wh";
-        lines.Add(batteryLine);
+        if (batteryWatts.HasValue) {
+          systemPower = batteryWatts.Value;
+        }
       }
+      lines.Add($"SYS: {systemPower:F1}W ({source})");
 
       if (monitorFan)
-        lines.Add($"Fan:  {fanSpeedNow[0] * 100}, {fanSpeedNow[1] * 100}");
+        lines.Add($"FAN: {fanSpeedNow[0] * 100}/{fanSpeedNow[1] * 100} RPM");
 
-      List<string> stateParts = new List<string>();
-      if (currentGfxMode != OmenGfxMode.Unknown)
-        stateParts.Add($"MUX {FormatGfxMode(currentGfxMode)}");
-      if (currentGpuStatus != null)
-        stateParts.Add($"GPUCtl {FormatGpuControl(currentGpuStatus)}");
-      if (currentSmartAdapterStatus != OmenSmartAdapterStatus.Unknown)
-        stateParts.Add($"AC {FormatAdapterStatus(currentSmartAdapterStatus)}");
-      if (stateParts.Count > 0)
-        lines.Add("State: " + string.Join(" | ", stateParts));
-
-      if (currentSystemDesignData != null) {
-        List<string> featureParts = new List<string>();
-        if (currentSystemDesignData.GraphicsSwitcherSupported)
-          featureParts.Add("GfxSwitch");
-        if (currentSystemDesignData.SoftwareFanControlSupported)
-          featureParts.Add("SWFan");
-        featureParts.Add($"PL4 {currentSystemDesignData.DefaultPl4}W");
-        string fanTypes = FormatFanTypes(currentFanTypeInfo);
-        if (!string.IsNullOrEmpty(fanTypes))
-          featureParts.Add($"FanType {fanTypes}");
-        if (currentKeyboardType != OmenKeyboardType.Unknown)
-          featureParts.Add($"Kbd {(byte)currentKeyboardType:X2}");
-        lines.Add("Feat:  " + string.Join(" | ", featureParts));
+      if (smartPowerControlEnabled) {
+        string cpuCap = smartCpuLimitWatts > 0 ? $"{smartCpuLimitWatts}W" : "--";
+        lines.Add($"CTL: {smartPowerControlState} | CPU {cpuCap} | GPU {smartGpuTier}");
       }
 
       return string.Join("\n", lines);

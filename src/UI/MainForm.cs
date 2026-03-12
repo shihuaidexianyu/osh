@@ -65,6 +65,7 @@ namespace OmenSuperHub {
     ComboBox cpuPowerComboBox;
     ComboBox gpuPowerComboBox;
     ComboBox gpuClockComboBox;
+    CheckBox smartPowerControlCheckBox;
     Button floatingBarButton;
 
     TabControl detailsTabControl;
@@ -404,17 +405,27 @@ namespace OmenSuperHub {
     }
 
     Border BuildPerformancePanel() {
-      var card = CreateCard(180);
+      var card = CreateCard(220);
       var grid = CreateSettingsGrid();
       AddTitleToGrid(grid, "功耗与性能", "设定 CPU/GPU 功耗策略与显卡锁频上限。");
 
       cpuPowerComboBox = CreateComboBox(cpuPowerItems, CpuPowerComboBox_SelectionChanged);
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
       gpuClockComboBox = CreateComboBox(gpuClockItems, GpuClockComboBox_SelectionChanged);
+      smartPowerControlCheckBox = new CheckBox {
+        Content = "启用智能功耗控制（Balanced + Emergency）",
+        Foreground = strongText,
+        FontSize = 14,
+        Margin = new Thickness(0, 6, 0, 8),
+        VerticalAlignment = VerticalAlignment.Center
+      };
+      smartPowerControlCheckBox.Checked += SmartPowerControlCheckBox_Changed;
+      smartPowerControlCheckBox.Unchecked += SmartPowerControlCheckBox_Changed;
 
       AddControlRow(grid, 1, "CPU 功率", cpuPowerComboBox);
       AddControlRow(grid, 2, "GPU 策略", gpuPowerComboBox);
       AddControlRow(grid, 3, "GPU 锁频", gpuClockComboBox);
+      AddControlRow(grid, 4, "智能控制", smartPowerControlCheckBox);
       card.Child = grid;
       return card;
     }
@@ -652,6 +663,7 @@ namespace OmenSuperHub {
         SelectComboItem(cpuPowerComboBox, snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting);
         SelectComboItem(gpuPowerComboBox, ConvertGpuPowerValue(snapshot.GpuPowerSetting));
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
+        smartPowerControlCheckBox.IsChecked = snapshot.SmartPowerControlEnabled;
 
         bool overlayEnabled = snapshot.FloatingBarEnabled;
       floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
@@ -718,6 +730,12 @@ namespace OmenSuperHub {
       RefreshDashboard();
     }
 
+    void SmartPowerControlCheckBox_Changed(object sender, RoutedEventArgs e) {
+      if (syncingControlState || smartPowerControlCheckBox == null || !smartPowerControlCheckBox.IsChecked.HasValue) return;
+      Program.ApplySmartPowerControlSetting(smartPowerControlCheckBox.IsChecked.Value);
+      RefreshDashboard();
+    }
+
     void FloatingBarButton_Click(object sender, RoutedEventArgs e) {
       if (syncingControlState) return;
       var snapshot = Program.GetDashboardSnapshot();
@@ -739,6 +757,8 @@ namespace OmenSuperHub {
         $"CPU Power      : {snapshot.CpuPowerWatts:F1} W",
         $"GPU Temp       : {(snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C" : "disabled")}",
         $"GPU Power      : {(snapshot.MonitorGpu ? $"{snapshot.GpuPowerWatts:F1} W" : "--")}",
+        $"System Est     : {snapshot.EstimatedSystemPowerWatts:F1} W",
+        $"System Target  : {snapshot.TargetSystemPowerWatts:F1} W",
         $"Battery Power  : {(batteryPower.HasValue ? $"{batteryPower.Value:F1} W" : "--")}",
         $"Battery State  : {BuildBatteryState(snapshot.Battery)}",
         $"Capacity       : {(snapshot.Battery != null ? $"{snapshot.Battery.RemainingCapacityMilliwattHours / 1000f:F1} Wh" : "--")}",
@@ -760,6 +780,11 @@ namespace OmenSuperHub {
         $"CPU Limit      : {(snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting)}",
         $"GPU Policy     : {ConvertGpuPowerValue(snapshot.GpuPowerSetting)}",
         $"GPU Clock      : {(snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原")}",
+        $"Smart Power    : {(snapshot.SmartPowerControlEnabled ? "Enabled" : "Disabled")} ({snapshot.SmartPowerControlState})",
+        $"Smart Reason   : {snapshot.SmartPowerControlReason}",
+        $"Smart CPU Cap  : {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts} W" : "--")}",
+        $"Smart GPU Tier : {snapshot.SmartGpuTier}",
+        $"Smart FanBoost : {(snapshot.SmartFanBoostActive ? "On" : "Off")}",
         $"Floating Bar   : {(snapshot.FloatingBarEnabled ? "开启" : "关闭")}",
         $"GPU Control    : {FormatGpuControl(snapshot.GpuStatus)}",
         $"Adapter        : {FormatAdapterStatus(snapshot.SmartAdapterStatus)}",
@@ -780,7 +805,8 @@ namespace OmenSuperHub {
         "二、功耗与性能" + Environment.NewLine +
         "1. 模式切换会影响 CPU/GPU 行为，部分机型会在切换时重置功耗上限。" + Environment.NewLine +
         "2. CPU 功率设置会同时影响 PL1/PL2。" + Environment.NewLine +
-        "3. GPU 策略与锁频用于在温度、噪音和性能之间平衡。" + Environment.NewLine + Environment.NewLine +
+        "3. GPU 策略与锁频用于在温度、噪音和性能之间平衡。" + Environment.NewLine +
+        "4. 智能功耗控制会在不超过手动上限的前提下动态调节，并在高温时进入紧急保护。" + Environment.NewLine + Environment.NewLine +
         "三、浮窗与监控" + Environment.NewLine +
         "1. 浮窗显示每秒刷新一次，可在主页面直接开关。" + Environment.NewLine +
         "2. 主界面“实时遥测”展示 CPU/GPU/电池/风扇等核心数据。" + Environment.NewLine + Environment.NewLine +

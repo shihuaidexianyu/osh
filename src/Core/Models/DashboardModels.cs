@@ -37,5 +37,13 @@ namespace OmenSuperHub {
     public OmenKeyboardType KeyboardType { get; set; }
     public BatteryTelemetry Battery { get; set; }
     public int BatteryPercent { get; set; }
+    public bool SmartPowerControlEnabled { get; set; }
+    public string SmartPowerControlState { get; set; }
+    public string SmartPowerControlReason { get; set; }
+    public float EstimatedSystemPowerWatts { get; set; }
+    public float TargetSystemPowerWatts { get; set; }
+    public int SmartCpuLimitWatts { get; set; }
+    public string SmartGpuTier { get; set; }
+    public bool SmartFanBoostActive { get; set; }
   }
 }

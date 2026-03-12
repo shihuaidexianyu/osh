@@ -275,6 +275,7 @@
     <Compile Include="src\UI\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="src\Core\Control\PowerController.cs" />
     <Compile Include="src\Hardware\OmenHardware.cs" />
     <Compile Include="src\Core\Models\DashboardModels.cs" />
     <Compile Include="Properties\AssemblyVersion.cs" />

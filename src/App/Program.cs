@@ -99,6 +99,7 @@ namespace OmenSuperHub {
         SetCpuPowerLimit((byte)watt);
       }
 
+      powerController.Reset();
       SaveConfig("CpuPower");
     }
 
@@ -117,6 +118,7 @@ namespace OmenSuperHub {
           break;
       }
 
+      powerController.Reset();
       SaveConfig("GpuPower");
     }
 
@@ -135,6 +137,22 @@ namespace OmenSuperHub {
       }
 
       SaveConfig("FloatingBar");
+    }
+
+    internal static void ApplySmartPowerControlSetting(bool enabled) {
+      smartPowerControlEnabled = enabled;
+      powerController.Reset();
+
+      if (!enabled) {
+        RestoreCPUPower();
+        RestoreGpuPower();
+        if (fanControl == "auto")
+          SetMaxFanSpeedOff();
+        smartPowerControlState = "manual";
+        smartPowerControlReason = "disabled";
+      }
+
+      SaveConfig("SmartPowerControl");
     }
 
     [DllImport("user32.dll")]
@@ -156,6 +174,16 @@ namespace OmenSuperHub {
     static int countRestore = 0, gpuClock = 0;
     static int alreadyRead = 0, alreadyReadCode = 1000;
     static string fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
+    static bool smartPowerControlEnabled = true;
+    static string smartPowerControlState = "balanced";
+    static string smartPowerControlReason = "stable";
+    static float estimatedSystemPowerWatts = 0;
+    static float targetSystemPowerWatts = 0;
+    static int smartCpuLimitWatts = 0;
+    static string smartGpuTier = "max";
+    static bool smartFanBoostActive = false;
+    static readonly object powerControlLock = new object();
+    static readonly PowerController powerController = new PowerController();
     //static OpenComputer openComputer = new OpenComputer() { CPUEnabled = true };
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
     static bool openLib = true, monitorGPU = true, monitorFan = true, powerOnline = true;
@@ -224,6 +252,7 @@ namespace OmenSuperHub {
             QueryHarware();
             if (monitorFan)
               fanSpeedNow = GetFanLevel();
+            ApplySmartPowerControl();
           } catch {
           }
         }, null, 100, 1000);
@@ -515,6 +544,124 @@ namespace OmenSuperHub {
         int value = int.Parse(cpuPower.Replace(" W", "").Trim());
         if (value > 10 && value <= 254) {
           SetCpuPowerLimit((byte)value);
+        }
+      }
+    }
+
+    static void RestoreGpuPower() {
+      switch (gpuPower) {
+        case "max":
+          SetMaxGpuPower();
+          break;
+        case "med":
+          SetMedGpuPower();
+          break;
+        default:
+          SetMinGpuPower();
+          break;
+      }
+    }
+
+    static int GetManualCpuLimitWattsForController() {
+      if (cpuPower == "max")
+        return 125;
+
+      if (cpuPower.EndsWith(" W")) {
+        int value;
+        if (int.TryParse(cpuPower.Replace(" W", string.Empty).Trim(), out value))
+          return Math.Max(25, Math.Min(254, value));
+      }
+
+      return 90;
+    }
+
+    static GpuPowerTier GetManualGpuTierForController() {
+      switch (gpuPower) {
+        case "max":
+          return GpuPowerTier.Max;
+        case "med":
+          return GpuPowerTier.Med;
+        default:
+          return GpuPowerTier.Min;
+      }
+    }
+
+    static string FormatGpuTierForDisplay(GpuPowerTier tier) {
+      switch (tier) {
+        case GpuPowerTier.Max:
+          return "max";
+        case GpuPowerTier.Med:
+          return "med";
+        default:
+          return "min";
+      }
+    }
+
+    static void ApplySmartPowerControl() {
+      if (!smartPowerControlEnabled || isShuttingDown || countDB > 0 || DBVersion == 1)
+        return;
+
+      lock (powerControlLock) {
+        try {
+          float? batteryDischarge = null;
+          if (currentBatteryTelemetry != null &&
+              currentBatteryTelemetry.Discharging &&
+              currentBatteryTelemetry.DischargeRateMilliwatts > 0) {
+            batteryDischarge = currentBatteryTelemetry.DischargeRateMilliwatts / 1000f;
+          }
+
+          var input = new PowerControlInput {
+            AcOnline = powerOnline,
+            PerformanceMode = fanMode == "performance",
+            CoolFanCurve = fanTable == "cool",
+            MonitorGpu = monitorGPU,
+            FanControlAuto = fanControl == "auto",
+            ManualCpuLimitWatts = GetManualCpuLimitWattsForController(),
+            ManualGpuTier = GetManualGpuTierForController(),
+            CpuTemperatureC = CPUTemp,
+            CpuPowerWatts = CPUPower,
+            GpuTemperatureC = GPUTemp,
+            GpuPowerWatts = GPUPower,
+            BaseSystemPowerWatts = powerOnline ? (monitorGPU ? 14f : 11f) : (monitorGPU ? 10f : 8f),
+            BatteryDischargePowerWatts = batteryDischarge
+          };
+
+          PowerControlDecision decision = powerController.Evaluate(input);
+          smartPowerControlState = decision.State;
+          smartPowerControlReason = decision.Reason;
+          estimatedSystemPowerWatts = decision.EstimatedSystemPowerWatts;
+          targetSystemPowerWatts = decision.TargetSystemPowerWatts;
+          smartCpuLimitWatts = decision.CurrentCpuLimitWatts;
+          smartGpuTier = FormatGpuTierForDisplay(decision.CurrentGpuTier);
+          smartFanBoostActive = decision.FanBoostActive;
+
+          if (decision.ApplyCpuLimit) {
+            int cpuLimit = Math.Max(1, Math.Min(254, decision.CpuLimitWatts));
+            SetCpuPowerLimit((byte)cpuLimit);
+          }
+
+          if (decision.ApplyGpuTier) {
+            switch (decision.GpuTier) {
+              case GpuPowerTier.Max:
+                SetMaxGpuPower();
+                break;
+              case GpuPowerTier.Med:
+                SetMedGpuPower();
+                break;
+              default:
+                SetMinGpuPower();
+                break;
+            }
+          }
+
+          if (fanControl == "auto" && decision.ApplyFanBoost) {
+            if (decision.FanBoostActive) {
+              SetMaxFanSpeedOn();
+            } else {
+              SetMaxFanSpeedOff();
+            }
+          }
+        } catch {
         }
       }
     }
@@ -1341,7 +1488,15 @@ namespace OmenSuperHub {
           RemainingCapacityMilliwattHours = currentBatteryTelemetry.RemainingCapacityMilliwattHours,
           VoltageMillivolts = currentBatteryTelemetry.VoltageMillivolts
         },
-        BatteryPercent = (int)Math.Round(SystemInformation.PowerStatus.BatteryLifePercent * 100)
+        BatteryPercent = (int)Math.Round(SystemInformation.PowerStatus.BatteryLifePercent * 100),
+        SmartPowerControlEnabled = smartPowerControlEnabled,
+        SmartPowerControlState = smartPowerControlState,
+        SmartPowerControlReason = smartPowerControlReason,
+        EstimatedSystemPowerWatts = estimatedSystemPowerWatts,
+        TargetSystemPowerWatts = targetSystemPowerWatts,
+        SmartCpuLimitWatts = smartCpuLimitWatts,
+        SmartGpuTier = smartGpuTier,
+        SmartFanBoostActive = smartFanBoostActive
       };
     }
 
@@ -1550,6 +1705,7 @@ namespace OmenSuperHub {
               key.SetValue("CustomIcon", customIcon);
               key.SetValue("OmenKey", omenKey);
               key.SetValue("MonitorFan", monitorFan);
+              key.SetValue("SmartPowerControl", smartPowerControlEnabled);
               key.SetValue("FloatingBarSize", textSize);
               key.SetValue("FloatingBarLoc", floatingBarLoc);
               key.SetValue("FloatingBar", floatingBar);
@@ -1593,6 +1749,9 @@ namespace OmenSuperHub {
                   break;
                 case "MonitorFan":
                   key.SetValue("MonitorFan", monitorFan);
+                  break;
+                case "SmartPowerControl":
+                  key.SetValue("SmartPowerControl", smartPowerControlEnabled);
                   break;
                 case "FloatingBarSize":
                   key.SetValue("FloatingBarSize", textSize);
@@ -1785,6 +1944,14 @@ namespace OmenSuperHub {
             } else {
               monitorFan = false;
               UpdateCheckedState("monitorFanGroup", "关闭风扇监控");
+            }
+
+            smartPowerControlEnabled = Convert.ToBoolean(key.GetValue("SmartPowerControl", true));
+            if (!smartPowerControlEnabled) {
+              powerController.Reset();
+              smartPowerControlState = "manual";
+              smartPowerControlReason = "disabled";
+              smartFanBoostActive = false;
             }
 
             textSize = (int)key.GetValue("FloatingBarSize", 48);

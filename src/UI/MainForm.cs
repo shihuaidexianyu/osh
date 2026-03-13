@@ -241,17 +241,41 @@ namespace OmenSuperHub {
         Margin = new Thickness(22, 18, 22, 18),
         Background = pageBack
       };
-      var mainScroll = new ScrollViewer {
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        Background = Brushes.Transparent
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+      var header = BuildHeaderPanel();
+      Grid.SetRow(header, 0);
+      root.Children.Add(header);
+
+      var tabs = new TabControl {
+        Margin = new Thickness(0, 14, 0, 0),
+        Background = Brushes.Transparent,
+        BorderThickness = new Thickness(0)
       };
-      var contentStack = new StackPanel();
-      mainScroll.Content = contentStack;
+      tabs.Items.Add(CreateTabPage("主控制", BuildMainControlPage()));
+      tabs.Items.Add(CreateTabPage("设备状态", BuildHardwareStatusPage()));
+      tabs.Items.Add(CreateTabPage("高级设置", BuildAdvancedSettingsPage()));
 
-      contentStack.Children.Add(BuildHeaderPanel());
-      contentStack.Children.Add(BuildQuickOverviewPanel());
+      Grid.SetRow(tabs, 1);
+      root.Children.Add(tabs);
+      window.Content = root;
+    }
 
+    TabItem CreateTabPage(string header, UIElement content) {
+      return new TabItem {
+        Header = header,
+        Content = new ScrollViewer {
+          VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+          HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+          Background = Brushes.Transparent,
+          Padding = new Thickness(0, 14, 0, 0),
+          Content = content
+        }
+      };
+    }
+
+    UIElement BuildMainControlPage() {
       var controlsGrid = new Grid();
       controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
       controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -259,27 +283,49 @@ namespace OmenSuperHub {
       var leftColumn = new StackPanel {
         Margin = new Thickness(0, 0, 10, 0)
       };
-      leftColumn.Children.Add(BuildCoolingPanel());
+      leftColumn.Children.Add(BuildQuickOverviewPanel());
       leftColumn.Children.Add(BuildPerformancePanel());
-      leftColumn.Children.Add(BuildOverlayPanel());
 
       var rightColumn = new StackPanel {
         Margin = new Thickness(10, 0, 0, 0)
       };
       rightColumn.Children.Add(BuildSmartPowerPanel());
-      rightColumn.Children.Add(BuildStatusPanel());
+      rightColumn.Children.Add(BuildOverlayPanel());
+
+      Grid.SetColumn(leftColumn, 0);
+      Grid.SetColumn(rightColumn, 1);
+      controlsGrid.Children.Add(leftColumn);
+      controlsGrid.Children.Add(rightColumn);
+      return controlsGrid;
+    }
+
+    UIElement BuildHardwareStatusPage() {
+      var controlsGrid = new Grid();
+      controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      controlsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+      var leftColumn = new StackPanel {
+        Margin = new Thickness(0, 0, 10, 0)
+      };
+      leftColumn.Children.Add(BuildStatusPanel());
+
+      var rightColumn = new StackPanel {
+        Margin = new Thickness(10, 0, 0, 0)
+      };
       rightColumn.Children.Add(BuildTemperatureSensorsPanel());
 
       Grid.SetColumn(leftColumn, 0);
       Grid.SetColumn(rightColumn, 1);
       controlsGrid.Children.Add(leftColumn);
       controlsGrid.Children.Add(rightColumn);
-      contentStack.Children.Add(controlsGrid);
+      return controlsGrid;
+    }
 
-      contentStack.Children.Add(BuildStrategyTuningPanel());
-
-      root.Children.Add(mainScroll);
-      window.Content = root;
+    UIElement BuildAdvancedSettingsPage() {
+      var content = new StackPanel();
+      content.Children.Add(BuildCoolingPanel());
+      content.Children.Add(BuildStrategyTuningPanel());
+      return content;
     }
 
     Border CreateCard(double minHeight) {

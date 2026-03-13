@@ -38,6 +38,7 @@ namespace OmenSuperHub {
     const int ManualFanMaxRpm = 6400;
     const int ManualFanStepRpm = 100;
 
+    readonly string[] usageModeItems = { "安静", "均衡", "性能", "自定义" };
     readonly string[] fanModeItems = { "均衡", "性能" };
     readonly string[] fanControlModeItems = { "自动", "最大风扇", "手动" };
     readonly string[] fanTableItems = { "安静模式", "降温模式" };
@@ -100,6 +101,7 @@ namespace OmenSuperHub {
     TextBlock batteryGuardTriggerValueText;
     TextBlock batteryGuardReleaseValueText;
 
+    ComboBox usageModeComboBox;
     ComboBox fanModeComboBox;
     ComboBox fanControlComboBox;
     Slider manualFanRpmSlider;
@@ -430,8 +432,9 @@ namespace OmenSuperHub {
     Border BuildPerformancePanel() {
       var card = CreateCard(220);
       var grid = CreateSettingsGrid();
-      AddTitleToGrid(grid, "功耗与性能", "设定 CPU/GPU 功耗策略与显卡锁频上限。");
+      AddTitleToGrid(grid, "功耗与性能", "先选主模式，再按需覆盖 CPU/GPU 和锁频。");
 
+      usageModeComboBox = CreateComboBox(usageModeItems, UsageModeComboBox_SelectionChanged);
       cpuPowerComboBox = CreateComboBox(cpuPowerItems, CpuPowerComboBox_SelectionChanged);
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
       gpuClockComboBox = CreateComboBox(gpuClockItems, GpuClockComboBox_SelectionChanged);
@@ -445,10 +448,11 @@ namespace OmenSuperHub {
       smartPowerControlCheckBox.Checked += SmartPowerControlCheckBox_Changed;
       smartPowerControlCheckBox.Unchecked += SmartPowerControlCheckBox_Changed;
 
-      AddControlRow(grid, 1, "CPU 功率", cpuPowerComboBox);
-      AddControlRow(grid, 2, "GPU 策略", gpuPowerComboBox);
-      AddControlRow(grid, 3, "GPU 锁频", gpuClockComboBox);
-      AddControlRow(grid, 4, "智能控制", smartPowerControlCheckBox);
+      AddControlRow(grid, 1, "主模式", usageModeComboBox);
+      AddControlRow(grid, 2, "CPU 功率", cpuPowerComboBox);
+      AddControlRow(grid, 3, "GPU 策略", gpuPowerComboBox);
+      AddControlRow(grid, 4, "GPU 锁频", gpuClockComboBox);
+      AddControlRow(grid, 5, "智能控制", smartPowerControlCheckBox);
       card.Child = grid;
       return card;
     }
@@ -918,7 +922,7 @@ namespace OmenSuperHub {
       leftGpuText.Text = snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C | {snapshot.GpuPowerWatts:F1} W" : "监控关闭";
       leftBatteryText.Text = BuildBatterySummary(snapshot);
       leftFanText.Text = FormatFanRpm(snapshot.FanSpeeds);
-      leftModeText.Text = $"{(snapshot.FanMode == "performance" ? "性能" : "均衡")} · {ConvertFanControlValue(snapshot.FanControl)}";
+      leftModeText.Text = $"{ConvertUsageMode(snapshot.UsageMode)} · {ConvertFanControlValue(snapshot.FanControl)}";
 
       gfxModeText.Text = FormatGfxMode(snapshot.GraphicsMode);
       adapterText.Text = $"{FormatAdapterStatus(snapshot.SmartAdapterStatus)} / {(snapshot.AcOnline ? "AC" : "Battery")}";
@@ -936,6 +940,7 @@ namespace OmenSuperHub {
 
     bool IsControlInteractionActive() {
       if (fanModeComboBox?.IsDropDownOpen == true) return true;
+      if (usageModeComboBox?.IsDropDownOpen == true) return true;
       if (fanControlComboBox?.IsDropDownOpen == true) return true;
       if (fanTableComboBox?.IsDropDownOpen == true) return true;
       if (tempSensitivityComboBox?.IsDropDownOpen == true) return true;
@@ -962,6 +967,7 @@ namespace OmenSuperHub {
     void SyncControlState(DashboardSnapshot snapshot) {
       syncingControlState = true;
       try {
+        SelectComboItem(usageModeComboBox, ConvertUsageMode(snapshot.UsageMode));
         SelectComboItem(fanModeComboBox, snapshot.FanMode == "performance" ? "性能" : "均衡");
         int manualRpm = ParseManualFanRpm(snapshot.FanControl);
         if (snapshot.FanControl == "auto") {
@@ -1005,6 +1011,14 @@ namespace OmenSuperHub {
       } else if (comboBox.SelectedIndex < 0 && comboBox.Items.Count > 0) {
         comboBox.SelectedIndex = 0;
       }
+    }
+
+    void UsageModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+      if (syncingControlState || usageModeComboBox.SelectedItem == null) return;
+      string mode = ConvertUsageModeBack(usageModeComboBox.SelectedItem.ToString());
+      if (mode == "custom") return;
+      Program.ApplyUsageModeSetting(mode);
+      RefreshDashboard();
     }
 
     void FanModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -1619,6 +1633,32 @@ namespace OmenSuperHub {
       if (value == "auto") return "自动";
       if (value == "max") return "最大风扇";
       return value;
+    }
+
+    string ConvertUsageMode(string value) {
+      switch ((value ?? string.Empty).ToLowerInvariant()) {
+        case "quiet":
+          return "安静";
+        case "performance":
+          return "性能";
+        case "custom":
+          return "自定义";
+        default:
+          return "均衡";
+      }
+    }
+
+    string ConvertUsageModeBack(string value) {
+      switch (value) {
+        case "安静":
+          return "quiet";
+        case "性能":
+          return "performance";
+        case "自定义":
+          return "custom";
+        default:
+          return "balanced";
+      }
     }
 
     string ConvertGpuPowerValue(string value) {

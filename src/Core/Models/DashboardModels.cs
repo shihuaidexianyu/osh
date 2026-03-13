@@ -26,6 +26,7 @@ namespace OmenSuperHub {
     public bool MonitorGpu { get; set; }
     public bool MonitorFan { get; set; }
     public bool AcOnline { get; set; }
+    public string UsageMode { get; set; }
     public string FanMode { get; set; }
     public string FanControl { get; set; }
     public string FanTable { get; set; }

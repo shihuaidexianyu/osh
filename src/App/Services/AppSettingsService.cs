@@ -3,6 +3,7 @@ using Microsoft.Win32;
 
 namespace OmenSuperHub {
   internal sealed class AppSettingsSnapshot {
+    public string UsageMode { get; set; } = "balanced";
     public string FanTable { get; set; } = "silent";
     public string FanMode { get; set; } = "performance";
     public string FanControl { get; set; } = "auto";
@@ -33,6 +34,7 @@ namespace OmenSuperHub {
             return false;
           }
 
+          snapshot.UsageMode = ReadString(key, "UsageMode", snapshot.UsageMode);
           snapshot.FanTable = ReadString(key, "FanTable", snapshot.FanTable);
           snapshot.FanMode = ReadString(key, "FanMode", snapshot.FanMode);
           snapshot.FanControl = ReadString(key, "FanControl", snapshot.FanControl);
@@ -71,6 +73,9 @@ namespace OmenSuperHub {
           }
 
           switch (configName) {
+            case "UsageMode":
+              key.SetValue("UsageMode", snapshot.UsageMode);
+              break;
             case "FanTable":
               key.SetValue("FanTable", snapshot.FanTable);
               break;
@@ -182,6 +187,7 @@ namespace OmenSuperHub {
     }
 
     static void SaveAllConfigValues(RegistryKey key, AppSettingsSnapshot snapshot) {
+      key.SetValue("UsageMode", snapshot.UsageMode);
       key.SetValue("FanTable", snapshot.FanTable);
       key.SetValue("FanMode", snapshot.FanMode);
       key.SetValue("FanControl", snapshot.FanControl);

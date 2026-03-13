@@ -21,6 +21,8 @@ using System.IO.Pipes;
 
 namespace OmenSuperHub {
   static class Program {
+    static bool suppressUsageModeAutoMark;
+
     internal static void ApplyFanModeSetting(string mode) {
       if (mode == "performance") {
         fanMode = "performance";
@@ -31,6 +33,7 @@ namespace OmenSuperHub {
       }
 
       RestoreCPUPower();
+      MarkUsageModeCustom();
       SaveConfig("FanMode");
     }
 
@@ -49,12 +52,14 @@ namespace OmenSuperHub {
         ApplyManualFanRpm(controlValue);
       }
 
+      MarkUsageModeCustom();
       SaveConfig("FanControl");
     }
 
     internal static void ApplyFanTableSetting(string value) {
       fanTable = value == "cool" ? "cool" : "silent";
       LoadFanConfig(fanTable == "cool" ? "cool.txt" : "silent.txt");
+      MarkUsageModeCustom();
       SaveConfig("FanTable");
     }
 
@@ -76,6 +81,7 @@ namespace OmenSuperHub {
           break;
       }
 
+      MarkUsageModeCustom();
       SaveConfig("TempSensitivity");
     }
 
@@ -90,6 +96,7 @@ namespace OmenSuperHub {
       }
 
       powerController.Reset();
+      MarkUsageModeCustom();
       SaveConfig("CpuPower");
     }
 
@@ -109,7 +116,56 @@ namespace OmenSuperHub {
       }
 
       powerController.Reset();
+      MarkUsageModeCustom();
       SaveConfig("GpuPower");
+    }
+
+    internal static void ApplyUsageModeSetting(string mode) {
+      switch (mode) {
+        case "quiet":
+        case "balanced":
+        case "performance":
+          break;
+        default:
+          mode = "balanced";
+          break;
+      }
+
+      suppressUsageModeAutoMark = true;
+      try {
+        switch (mode) {
+          case "quiet":
+            ApplyFanModeSetting("default");
+            ApplyFanControlSetting("auto");
+            ApplyFanTableSetting("silent");
+            ApplyTempSensitivitySetting("low");
+            ApplyCpuPowerSetting("45 W");
+            ApplyGpuPowerSetting("min");
+            break;
+          case "performance":
+            ApplyFanModeSetting("performance");
+            ApplyFanControlSetting("auto");
+            ApplyFanTableSetting("cool");
+            ApplyTempSensitivitySetting("high");
+            ApplyCpuPowerSetting("max");
+            ApplyGpuPowerSetting("max");
+            break;
+          default:
+            ApplyFanModeSetting("default");
+            ApplyFanControlSetting("auto");
+            ApplyFanTableSetting("silent");
+            ApplyTempSensitivitySetting("medium");
+            ApplyCpuPowerSetting("65 W");
+            ApplyGpuPowerSetting("med");
+            mode = "balanced";
+            break;
+        }
+      } finally {
+        suppressUsageModeAutoMark = false;
+      }
+
+      usageMode = mode;
+      SaveConfig("UsageMode");
     }
 
     internal static void ApplyGpuClockSetting(int value) {
@@ -171,6 +227,15 @@ namespace OmenSuperHub {
       ApplyPowerControlTuning(GetDefaultPowerControlTuning());
     }
 
+    static void MarkUsageModeCustom() {
+      if (suppressUsageModeAutoMark || usageMode == "custom") {
+        return;
+      }
+
+      usageMode = "custom";
+      SaveConfig("UsageMode");
+    }
+
     [DllImport("user32.dll")]
     static extern bool SetProcessDPIAware();
 
@@ -192,7 +257,7 @@ namespace OmenSuperHub {
     const int FanMaxRpm = 6400;
     const int FanRawStep = 100;
     const int FanMaxRawLevel = FanMaxRpm / FanRawStep;
-    static string fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
+    static string usageMode = "balanced", fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
     static bool smartPowerControlEnabled = true;
     static string smartPowerControlState = "balanced";
     static string smartPowerControlReason = "stable";
@@ -553,6 +618,38 @@ namespace OmenSuperHub {
       }
     }
 
+    static string InferUsageModeFromCurrentSettings() {
+      if (fanControl != "auto") {
+        return "custom";
+      }
+
+      if (fanMode == "default" &&
+          fanTable == "silent" &&
+          tempSensitivity == "low" &&
+          cpuPower == "45 W" &&
+          gpuPower == "min") {
+        return "quiet";
+      }
+
+      if (fanMode == "default" &&
+          fanTable == "silent" &&
+          tempSensitivity == "medium" &&
+          cpuPower == "65 W" &&
+          gpuPower == "med") {
+        return "balanced";
+      }
+
+      if (fanMode == "performance" &&
+          fanTable == "cool" &&
+          tempSensitivity == "high" &&
+          cpuPower == "max" &&
+          gpuPower == "max") {
+        return "performance";
+      }
+
+      return "custom";
+    }
+
     static int GetManualCpuLimitWattsForController() {
       if (cpuPower == "max")
         return 125;
@@ -752,6 +849,7 @@ namespace OmenSuperHub {
         MonitorGpu = monitorGPU,
         MonitorFan = monitorFan,
         AcOnline = powerOnline,
+        UsageMode = usageMode,
         FanMode = fanMode,
         FanControl = fanControl,
         FanTable = fanTable,
@@ -958,14 +1056,12 @@ namespace OmenSuperHub {
     static void RestoreConfig() {
       AppSettingsSnapshot snapshot;
       if (!settingsService.TryLoadConfig(out snapshot)) {
-        LoadFanConfig("silent.txt");
-        SetFanMode(0x31);
-        SetMaxFanSpeedOff();
-        SetMaxGpuPower();
+        ApplyUsageModeSetting("balanced");
         LoadPowerControlTuning();
         return;
       }
 
+      usageMode = snapshot.UsageMode;
       fanTable = snapshot.FanTable;
       if (fanTable.Contains("cool")) {
         LoadFanConfig("cool.txt");
@@ -1121,6 +1217,7 @@ namespace OmenSuperHub {
         smartFanBoostActive = false;
       }
       LoadPowerControlTuning();
+      usageMode = InferUsageModeFromCurrentSettings();
 
       textSize = snapshot.FloatingBarSize;
       RefreshShellStatus();
@@ -1155,6 +1252,7 @@ namespace OmenSuperHub {
 
     static AppSettingsSnapshot CreateSettingsSnapshot() {
       return new AppSettingsSnapshot {
+        UsageMode = usageMode,
         FanTable = fanTable,
         FanMode = fanMode,
         FanControl = fanControl,

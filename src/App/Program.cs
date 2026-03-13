@@ -8,7 +8,6 @@ using System.Threading;
 using Microsoft.Win32.TaskScheduler;
 using System.Reflection;
 using Microsoft.Win32;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Management;
 using TaskEx = System.Threading.Tasks.Task;
@@ -186,7 +185,6 @@ namespace OmenSuperHub {
     static OmenFanTypeInfo currentFanTypeInfo;
     static OmenKeyboardType currentKeyboardType = OmenKeyboardType.Unknown;
     static BatteryTelemetry currentBatteryTelemetry;
-    static int DBVersion = 2, countDB = 0, countDBInit = 5, tryTimes = 0, CPULimitDB = 25;
     static int textSize = 48;
     static int countRestore = 0, gpuClock = 0;
     static int alreadyRead = 0, alreadyReadCode = 1000;
@@ -591,7 +589,7 @@ namespace OmenSuperHub {
     }
 
     static void ApplySmartPowerControl() {
-      if (!smartPowerControlEnabled || isShuttingDown || countDB > 0 || DBVersion == 1)
+      if (!smartPowerControlEnabled || isShuttingDown)
         return;
 
       lock (powerControlLock) {
@@ -691,30 +689,6 @@ namespace OmenSuperHub {
       }
     }
 
-    static float GPUPowerLimits() {
-      string output = ExecuteCommand("nvidia-smi -q -d POWER").Output;
-      string currentPowerLimitPattern = @"Current Power Limit\s+:\s+([\d.]+)\s+W";
-      string maxPowerLimitPattern = @"Max Power Limit\s+:\s+([\d.]+)\s+W";
-
-      var currentPowerLimitMatch = Regex.Match(output, currentPowerLimitPattern);
-      var maxPowerLimitMatch = Regex.Match(output, maxPowerLimitPattern);
-
-      if (currentPowerLimitMatch.Success && maxPowerLimitMatch.Success) {
-        float currentPowerLimit = float.Parse(currentPowerLimitMatch.Groups[1].Value);
-        float maxPowerLimit = float.Parse(maxPowerLimitMatch.Groups[1].Value);
-
-        if (Math.Abs(currentPowerLimit - maxPowerLimit) < 1f)
-          return -currentPowerLimit;
-
-        else {
-          return currentPowerLimit;
-        }
-      } else {
-        Console.WriteLine("Error: Unable to find both power limits in the output.");
-        return -2;
-      }
-    }
-
     static ProcessResult ExecuteCommand(string command) {
       return processCommandService.Execute(command);
     }
@@ -729,56 +703,6 @@ namespace OmenSuperHub {
       }
 
       RefreshShellStatus();
-
-      if (countDB > 0) {
-        countDB--;
-        if (countDB == 0) {
-          string deviceId = "\"ACPI\\NVDA0820\\NPCF\"";
-          string command = $"pnputil /disable-device {deviceId}";
-          ExecuteCommand(command);
-
-          float powerLimits = GPUPowerLimits();
-          if (powerOnline && powerLimits >= 0) {
-            tryTimes++;
-            if (tryTimes == 2) {
-              tryTimes = 0;
-              if (CPUPower > CPULimitDB + 10)
-                MessageBox.Show($"请在CPU低负载下解锁", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-              else
-                MessageBox.Show($"功耗异常，解锁失败，请重新尝试！\n当前显卡功耗限制为：{powerLimits:F2} W ！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-              command = $"pnputil /enable-device {deviceId}";
-              ExecuteCommand(command);
-              DBVersion = 2;
-              countDB = 0;
-              SaveConfig("DBVersion");
-              UpdateCheckedState("DBGroup", "普通版本");
-            } else {
-              SetFanMode(0x31);
-              SetMaxGpuPower();
-              SetCpuPowerLimit((byte)CPULimitDB);
-              countDB = countDBInit;
-            }
-          } else {
-            tryTimes = 0;
-            if (autoStart == "off") {
-              MessageBox.Show($"解锁成功！但当前未设置开机自启，解锁后若重启电脑会导致功耗异常，需要重新解锁！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-          }
-          if (tryTimes == 0) {
-            if (fanMode.Contains("performance")) {
-              SetFanMode(0x31);
-            } else if (fanMode.Contains("default")) {
-              SetFanMode(0x30);
-            }
-
-            RestoreCPUPower();
-          }
-        } else if (countDB == countDBInit - 1) {
-          string deviceId = "\"ACPI\\NVDA0820\\NPCF\"";
-          string command = $"pnputil /enable-device {deviceId}";
-          ExecuteCommand(command);
-        }
-      }
 
       if (countRestore > 0) {
         countRestore--;
@@ -1054,10 +978,10 @@ namespace OmenSuperHub {
       fanMode = snapshot.FanMode;
       if (fanMode.Contains("performance")) {
         SetFanMode(0x31);
-        UpdateCheckedState("fanModeGroup", "狂暴模式");
+        UpdateCheckedState("fanModeGroup", "性能模式");
       } else if (fanMode.Contains("default")) {
         SetFanMode(0x30);
-        UpdateCheckedState("fanModeGroup", "平衡模式");
+        UpdateCheckedState("fanModeGroup", "均衡模式");
       }
 
       fanControl = snapshot.FanControl;
@@ -1112,15 +1036,15 @@ namespace OmenSuperHub {
       switch (gpuPower) {
         case "max":
           SetMaxGpuPower();
-          UpdateCheckedState("gpuPowerGroup", "CTGP开+DB开");
+          UpdateCheckedState("gpuPowerGroup", "高性能");
           break;
         case "med":
           SetMedGpuPower();
-          UpdateCheckedState("gpuPowerGroup", "CTGP开+DB关");
+          UpdateCheckedState("gpuPowerGroup", "均衡");
           break;
         case "min":
           SetMinGpuPower();
-          UpdateCheckedState("gpuPowerGroup", "CTGP关+DB关");
+          UpdateCheckedState("gpuPowerGroup", "节能");
           break;
       }
 
@@ -1129,25 +1053,6 @@ namespace OmenSuperHub {
         UpdateCheckedState("gpuClockGroup", gpuClock + " MHz");
       } else {
         UpdateCheckedState("gpuClockGroup", "还原");
-      }
-
-      DBVersion = snapshot.DBVersion;
-      switch (DBVersion) {
-        case 1:
-          DBVersion = 1;
-          SetFanMode(0x31);
-          SetMaxGpuPower();
-          SetCpuPowerLimit((byte)CPULimitDB);
-          countDB = countDBInit;
-          UpdateCheckedState("DBGroup", "解锁版本");
-          break;
-        case 2:
-          string deviceId = "\"ACPI\\NVDA0820\\NPCF\"";
-          string command = $"pnputil /enable-device {deviceId}";
-          ExecuteCommand(command);
-          DBVersion = 2;
-          UpdateCheckedState("DBGroup", "普通版本");
-          break;
       }
 
       autoStart = snapshot.AutoStart;
@@ -1257,7 +1162,6 @@ namespace OmenSuperHub {
         CpuPower = cpuPower,
         GpuPower = gpuPower,
         GpuClock = gpuClock,
-        DBVersion = DBVersion,
         AutoStart = autoStart,
         AlreadyRead = alreadyRead,
         CustomIcon = customIcon,

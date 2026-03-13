@@ -10,7 +10,6 @@ namespace OmenSuperHub {
     public string CpuPower { get; set; } = "max";
     public string GpuPower { get; set; } = "max";
     public int GpuClock { get; set; }
-    public int DBVersion { get; set; } = 2;
     public string AutoStart { get; set; } = "off";
     public int AlreadyRead { get; set; }
     public string CustomIcon { get; set; } = "original";
@@ -41,7 +40,6 @@ namespace OmenSuperHub {
           snapshot.CpuPower = ReadString(key, "CpuPower", snapshot.CpuPower);
           snapshot.GpuPower = ReadString(key, "GpuPower", snapshot.GpuPower);
           snapshot.GpuClock = ReadInt(key, "GpuClock", snapshot.GpuClock);
-          snapshot.DBVersion = ReadInt(key, "DBVersion", snapshot.DBVersion);
           snapshot.AutoStart = ReadString(key, "AutoStart", snapshot.AutoStart);
           snapshot.AlreadyRead = ReadInt(key, "AlreadyRead", snapshot.AlreadyRead);
           snapshot.CustomIcon = ReadString(key, "CustomIcon", snapshot.CustomIcon);
@@ -93,9 +91,6 @@ namespace OmenSuperHub {
               break;
             case "GpuClock":
               key.SetValue("GpuClock", snapshot.GpuClock);
-              break;
-            case "DBVersion":
-              key.SetValue("DBVersion", snapshot.DBVersion);
               break;
             case "AutoStart":
               key.SetValue("AutoStart", snapshot.AutoStart);
@@ -194,7 +189,6 @@ namespace OmenSuperHub {
       key.SetValue("CpuPower", snapshot.CpuPower);
       key.SetValue("GpuPower", snapshot.GpuPower);
       key.SetValue("GpuClock", snapshot.GpuClock);
-      key.SetValue("DBVersion", snapshot.DBVersion);
       key.SetValue("AutoStart", snapshot.AutoStart);
       key.SetValue("AlreadyRead", snapshot.AlreadyRead);
       key.SetValue("CustomIcon", snapshot.CustomIcon);

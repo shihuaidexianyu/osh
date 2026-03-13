@@ -38,12 +38,12 @@ namespace OmenSuperHub {
     const int ManualFanMaxRpm = 6400;
     const int ManualFanStepRpm = 100;
 
-    readonly string[] fanModeItems = { "平衡", "狂暴" };
+    readonly string[] fanModeItems = { "均衡", "性能" };
     readonly string[] fanControlModeItems = { "自动", "最大风扇", "手动" };
     readonly string[] fanTableItems = { "安静模式", "降温模式" };
     readonly string[] tempSensitivityItems = { "高", "中", "低", "实时" };
     readonly string[] cpuPowerItems = { "最大", "45 W", "55 W", "65 W", "75 W", "90 W" };
-    readonly string[] gpuPowerItems = { "CTGP开+DB开", "CTGP开+DB关", "CTGP关+DB关" };
+    readonly string[] gpuPowerItems = { "高性能", "均衡", "节能" };
     readonly string[] gpuClockItems = { "还原", "1600 MHz", "1800 MHz", "2000 MHz", "2200 MHz", "2400 MHz" };
     readonly string[] floatingBarLocationItems = { "左上角", "右上角" };
 
@@ -918,7 +918,7 @@ namespace OmenSuperHub {
       leftGpuText.Text = snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C | {snapshot.GpuPowerWatts:F1} W" : "监控关闭";
       leftBatteryText.Text = BuildBatterySummary(snapshot);
       leftFanText.Text = FormatFanRpm(snapshot.FanSpeeds);
-      leftModeText.Text = $"{(snapshot.FanMode == "performance" ? "狂暴" : "平衡")} · {ConvertFanControlValue(snapshot.FanControl)}";
+      leftModeText.Text = $"{(snapshot.FanMode == "performance" ? "性能" : "均衡")} · {ConvertFanControlValue(snapshot.FanControl)}";
 
       gfxModeText.Text = FormatGfxMode(snapshot.GraphicsMode);
       adapterText.Text = $"{FormatAdapterStatus(snapshot.SmartAdapterStatus)} / {(snapshot.AcOnline ? "AC" : "Battery")}";
@@ -962,7 +962,7 @@ namespace OmenSuperHub {
     void SyncControlState(DashboardSnapshot snapshot) {
       syncingControlState = true;
       try {
-        SelectComboItem(fanModeComboBox, snapshot.FanMode == "performance" ? "狂暴" : "平衡");
+        SelectComboItem(fanModeComboBox, snapshot.FanMode == "performance" ? "性能" : "均衡");
         int manualRpm = ParseManualFanRpm(snapshot.FanControl);
         if (snapshot.FanControl == "auto") {
           SelectComboItem(fanControlComboBox, "自动");
@@ -1009,7 +1009,7 @@ namespace OmenSuperHub {
 
     void FanModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || fanModeComboBox.SelectedItem == null) return;
-      Program.ApplyFanModeSetting(fanModeComboBox.SelectedItem.ToString() == "狂暴" ? "performance" : "default");
+      Program.ApplyFanModeSetting(fanModeComboBox.SelectedItem.ToString() == "性能" ? "performance" : "default");
       RefreshDashboard();
     }
 
@@ -1622,14 +1622,14 @@ namespace OmenSuperHub {
     }
 
     string ConvertGpuPowerValue(string value) {
-      if (value == "max") return "CTGP开+DB开";
-      if (value == "med") return "CTGP开+DB关";
-      return "CTGP关+DB关";
+      if (value == "max") return "高性能";
+      if (value == "med") return "均衡";
+      return "节能";
     }
 
     string ConvertGpuPowerValueBack(string value) {
-      if (value == "CTGP开+DB开") return "max";
-      if (value == "CTGP开+DB关") return "med";
+      if (value == "高性能") return "max";
+      if (value == "均衡") return "med";
       return "min";
     }
 

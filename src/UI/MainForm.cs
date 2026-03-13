@@ -31,6 +31,10 @@ namespace OmenSuperHub {
     readonly SolidColorBrush subtleFill = new SolidColorBrush(Color.FromRgb(248, 249, 251));
     readonly SolidColorBrush strongText = new SolidColorBrush(Color.FromRgb(29, 33, 40));
     readonly SolidColorBrush mutedText = new SolidColorBrush(Color.FromRgb(100, 108, 120));
+    readonly SolidColorBrush softBlueFill = new SolidColorBrush(Color.FromRgb(242, 246, 251));
+    readonly SolidColorBrush softGreenFill = new SolidColorBrush(Color.FromRgb(243, 247, 244));
+    readonly SolidColorBrush softOrangeFill = new SolidColorBrush(Color.FromRgb(250, 246, 241));
+    readonly SolidColorBrush softSlateFill = new SolidColorBrush(Color.FromRgb(244, 246, 248));
     readonly SolidColorBrush accentOrange = new SolidColorBrush(Color.FromRgb(189, 108, 0));
     readonly SolidColorBrush accentBlue = new SolidColorBrush(Color.FromRgb(0, 103, 192));
     readonly SolidColorBrush accentGreen = new SolidColorBrush(Color.FromRgb(11, 106, 69));
@@ -250,7 +254,8 @@ namespace OmenSuperHub {
       var tabs = new TabControl {
         Margin = new Thickness(0, 14, 0, 0),
         Background = Brushes.Transparent,
-        BorderThickness = new Thickness(0)
+        BorderThickness = new Thickness(0),
+        ItemContainerStyle = CreateTabItemStyle()
       };
       tabs.Items.Add(CreateTabPage("主控制", BuildMainControlPage()));
       tabs.Items.Add(CreateTabPage("设备状态", BuildHardwareStatusPage()));
@@ -263,7 +268,11 @@ namespace OmenSuperHub {
 
     TabItem CreateTabPage(string header, UIElement content) {
       return new TabItem {
-        Header = header,
+        Header = new TextBlock {
+          Text = header,
+          TextWrapping = TextWrapping.NoWrap,
+          Margin = new Thickness(2, 0, 2, 0)
+        },
         Content = new ScrollViewer {
           VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
           HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -332,11 +341,74 @@ namespace OmenSuperHub {
         Background = cardBack,
         BorderBrush = borderColor,
         BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10),
+        CornerRadius = new CornerRadius(12),
         Padding = new Thickness(20),
         Margin = new Thickness(0, 0, 0, 14),
         MinHeight = minHeight
       };
+    }
+
+    Style CreateTabItemStyle() {
+      var style = new Style(typeof(TabItem));
+      style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+      style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
+      style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+      style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 8, 16, 4)));
+      style.Setters.Add(new Setter(Control.MarginProperty, new Thickness(0, 0, 28, 6)));
+      style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 42d));
+      style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 112d));
+      style.Setters.Add(new Setter(Control.FontSizeProperty, 14d));
+      style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+      style.Setters.Add(new Setter(Control.ForegroundProperty, mutedText));
+      style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
+
+      var template = new ControlTemplate(typeof(TabItem));
+      var stack = new FrameworkElementFactory(typeof(StackPanel));
+      stack.SetValue(StackPanel.OrientationProperty, Orientation.Vertical);
+      stack.SetValue(FrameworkElement.MinHeightProperty, new TemplateBindingExtension(FrameworkElement.MinHeightProperty));
+
+      var border = new FrameworkElementFactory(typeof(Border));
+      border.Name = "TabBorder";
+      border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+      border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+      border.SetValue(Border.SnapsToDevicePixelsProperty, true);
+      var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+      presenter.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+      presenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+      presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+      presenter.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
+      presenter.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 0, 2, 4));
+
+      border.AppendChild(presenter);
+
+      var indicator = new FrameworkElementFactory(typeof(Border));
+      indicator.Name = "SelectionIndicator";
+      indicator.SetValue(Border.HeightProperty, 2d);
+      indicator.SetValue(Border.CornerRadiusProperty, new CornerRadius(999));
+      indicator.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+      indicator.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+
+      stack.AppendChild(border);
+      stack.AppendChild(indicator);
+      template.VisualTree = stack;
+
+      var selectedTrigger = new Trigger {
+        Property = TabItem.IsSelectedProperty,
+        Value = true
+      };
+      selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, strongText));
+      selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, accentBlue, "SelectionIndicator"));
+      template.Triggers.Add(selectedTrigger);
+
+      var hoverTrigger = new Trigger {
+        Property = TabItem.IsMouseOverProperty,
+        Value = true
+      };
+      hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, strongText));
+      template.Triggers.Add(hoverTrigger);
+
+      style.Setters.Add(new Setter(Control.TemplateProperty, template));
+      return style;
     }
 
     TextBlock CreateSectionTitle(string text) {
@@ -383,7 +455,24 @@ namespace OmenSuperHub {
     }
 
     Border CreateOverviewMetric(string title, string subtitle, Brush accentBrush, out TextBlock valueText) {
+      Brush tileFill = softSlateFill;
+      if (ReferenceEquals(accentBrush, accentBlue)) {
+        tileFill = softBlueFill;
+      } else if (ReferenceEquals(accentBrush, accentGreen)) {
+        tileFill = softGreenFill;
+      } else if (ReferenceEquals(accentBrush, accentOrange)) {
+        tileFill = softOrangeFill;
+      }
+
       var content = new StackPanel();
+      content.Children.Add(new Border {
+        Width = 28,
+        Height = 3,
+        Background = accentBrush,
+        CornerRadius = new CornerRadius(2),
+        Margin = new Thickness(0, 0, 0, 10),
+        HorizontalAlignment = HorizontalAlignment.Left
+      });
       content.Children.Add(new TextBlock {
         Text = title,
         Foreground = strongText,
@@ -394,65 +483,84 @@ namespace OmenSuperHub {
         Text = subtitle,
         Foreground = mutedText,
         FontSize = 12,
-        Margin = new Thickness(0, 0, 0, 6)
+        Margin = new Thickness(0, 2, 0, 0)
       });
 
       valueText = new TextBlock {
         Text = "--",
         Foreground = strongText,
-        FontSize = 18,
+        FontSize = 20,
         FontWeight = FontWeights.Bold,
-        TextWrapping = TextWrapping.Wrap
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 10, 0, 0)
       };
       content.Children.Add(valueText);
 
       return new Border {
-        MinWidth = 205,
-        Margin = new Thickness(0, 0, 10, 10),
-        Padding = new Thickness(12, 10, 12, 10),
-        CornerRadius = new CornerRadius(8),
+        MinWidth = 214,
+        Margin = new Thickness(0, 0, 12, 12),
+        Padding = new Thickness(14, 14, 14, 14),
+        CornerRadius = new CornerRadius(12),
         BorderBrush = borderColor,
         BorderThickness = new Thickness(1),
-        Background = subtleFill,
-        Child = new Border {
-          BorderBrush = accentBrush,
-          BorderThickness = new Thickness(3, 0, 0, 0),
-          Padding = new Thickness(10, 0, 0, 0),
-          Child = content
-        }
+        Background = tileFill,
+        Child = content
       };
     }
 
     Border BuildHeaderPanel() {
-      var card = CreateCard(130);
+      var card = CreateCard(132);
+
+      var layout = new Grid();
+      layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+      layout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
       var left = new StackPanel();
       left.Children.Add(new TextBlock {
-        Text = "OmenSuperHub 设置",
+        Text = "OmenSuperHub",
         Foreground = strongText,
         FontSize = 30,
         FontWeight = FontWeights.Bold
       });
       left.Children.Add(new TextBlock {
-        Text = "风扇、功耗与设备状态集中控制",
+        Text = "Intel i9-13900HX + RTX 4060 Laptop 的热噪功耗控制",
         Foreground = mutedText,
         FontSize = 13,
-        Margin = new Thickness(0, 2, 0, 2)
+        Margin = new Thickness(0, 4, 0, 0),
+        TextWrapping = TextWrapping.Wrap
       });
+
+      var right = new StackPanel {
+        HorizontalAlignment = HorizontalAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Center
+      };
       totalPowerText = new TextBlock {
         Text = "-- W",
         Foreground = accentOrange,
-        FontSize = 40,
-        FontWeight = FontWeights.Bold
+        FontSize = 44,
+        FontWeight = FontWeights.Bold,
+        HorizontalAlignment = HorizontalAlignment.Right
       };
       lastUpdateText = new TextBlock {
         Text = "最近刷新: --",
         Foreground = mutedText,
-        FontSize = 13
+        FontSize = 13,
+        HorizontalAlignment = HorizontalAlignment.Right
       };
-      left.Children.Add(totalPowerText);
-      left.Children.Add(lastUpdateText);
-      card.Child = left;
+      right.Children.Add(new TextBlock {
+        Text = "当前整机估算功耗",
+        Foreground = mutedText,
+        FontSize = 12,
+        HorizontalAlignment = HorizontalAlignment.Right
+      });
+      right.Children.Add(totalPowerText);
+      right.Children.Add(lastUpdateText);
+
+      Grid.SetColumn(left, 0);
+      Grid.SetColumn(right, 1);
+      layout.Children.Add(left);
+      layout.Children.Add(right);
+      card.Child = layout;
       return card;
     }
 
@@ -497,7 +605,7 @@ namespace OmenSuperHub {
         Content = "启用智能功耗保护与自动调节",
         Foreground = strongText,
         FontSize = 14,
-        Margin = new Thickness(0, 6, 0, 8),
+        Margin = new Thickness(0, 8, 0, 8),
         VerticalAlignment = VerticalAlignment.Center
       };
       smartPowerControlCheckBox.Checked += SmartPowerControlCheckBox_Changed;
@@ -649,14 +757,15 @@ namespace OmenSuperHub {
       };
       var resetButton = new Button {
         Content = "恢复默认",
-        Padding = new Thickness(12, 6, 12, 6),
+        Padding = new Thickness(14, 8, 14, 8),
         FontSize = 13,
         FontWeight = FontWeights.SemiBold,
         Foreground = strongText,
-        Background = subtleFill,
+        Background = softSlateFill,
         BorderBrush = borderColor
       };
       resetButton.Click += ResetTuningButton_Click;
+      StyleButton(resetButton);
       actions.Children.Add(resetButton);
 
       Grid.SetRow(actions, 2);
@@ -673,16 +782,17 @@ namespace OmenSuperHub {
 
       floatingBarButton = new Button {
         Content = "浮窗: 关闭",
-        Padding = new Thickness(10, 6, 10, 6),
+        Padding = new Thickness(14, 8, 14, 8),
         FontSize = 14,
         FontWeight = FontWeights.SemiBold,
         Foreground = strongText,
-        Background = subtleFill,
+        Background = softSlateFill,
         BorderBrush = borderColor,
         HorizontalAlignment = HorizontalAlignment.Left,
         MinWidth = 160
       };
       floatingBarButton.Click += FloatingBarButton_Click;
+      StyleButton(floatingBarButton);
       floatingBarLocationComboBox = CreateComboBox(floatingBarLocationItems, FloatingBarLocationComboBox_SelectionChanged);
 
       AddControlRow(grid, 1, "浮窗", floatingBarButton);
@@ -768,7 +878,6 @@ namespace OmenSuperHub {
     FrameworkElement CreateChartLegendItem(Brush color, string label) {
       var row = new StackPanel {
         Orientation = Orientation.Horizontal,
-        Margin = new Thickness(0, 0, 14, 6),
         VerticalAlignment = VerticalAlignment.Center
       };
       row.Children.Add(new Border {
@@ -785,7 +894,15 @@ namespace OmenSuperHub {
         FontSize = 12,
         VerticalAlignment = VerticalAlignment.Center
       });
-      return row;
+      return new Border {
+        Background = subtleFill,
+        BorderBrush = borderColor,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(10),
+        Padding = new Thickness(10, 6, 10, 6),
+        Margin = new Thickness(0, 0, 10, 8),
+        Child = row
+      };
     }
 
     Grid CreateSettingsGrid() {
@@ -813,7 +930,7 @@ namespace OmenSuperHub {
         Margin = new Thickness(0, 2, 0, 4)
       };
       progressBar = new ProgressBar {
-        Height = 8,
+        Height = 9,
         Minimum = 0,
         Maximum = 100,
         Value = 0,
@@ -946,11 +1063,11 @@ namespace OmenSuperHub {
 
     ComboBox CreateComboBox(IEnumerable<string> items, SelectionChangedEventHandler handler) {
       var comboBox = new ComboBox {
-        MinWidth = 260,
-        Height = 34,
+        MinWidth = 270,
+        Height = 38,
         FontSize = 14,
-        Padding = new Thickness(6, 3, 6, 3),
-        Background = subtleFill,
+        Padding = new Thickness(8, 4, 8, 4),
+        Background = Brushes.White,
         BorderBrush = borderColor,
         Foreground = strongText
       };
@@ -959,6 +1076,15 @@ namespace OmenSuperHub {
       }
       comboBox.SelectionChanged += handler;
       return comboBox;
+    }
+
+    void StyleButton(Button button) {
+      if (button == null) {
+        return;
+      }
+
+      button.BorderThickness = new Thickness(1);
+      button.Cursor = System.Windows.Input.Cursors.Hand;
     }
 
     FrameworkElement CreateManualFanRpmControl() {

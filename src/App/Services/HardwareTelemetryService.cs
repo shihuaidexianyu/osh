@@ -181,6 +181,11 @@ namespace OmenSuperHub {
     }
 
     public float SelectControlTemperature(bool preferCpu, IList<TemperatureSensorReading> readings, float fallback, out string source) {
+      if (preferCpu && TryGetCpuPackageTemperature(readings, out var cpuPackageTemperature, out var cpuPackageSource)) {
+        source = cpuPackageSource;
+        return cpuPackageTemperature;
+      }
+
       float bestPreferred = float.MinValue;
       string bestPreferredName = null;
       float bestGeneral = float.MinValue;
@@ -228,6 +233,35 @@ namespace OmenSuperHub {
 
       source = "fallback";
       return fallback;
+    }
+
+    static bool TryGetCpuPackageTemperature(IList<TemperatureSensorReading> readings, out float value, out string source) {
+      value = float.MinValue;
+      source = null;
+      if (readings == null) {
+        return false;
+      }
+
+      foreach (var reading in readings) {
+        if (reading == null || string.IsNullOrWhiteSpace(reading.Name)) {
+          continue;
+        }
+
+        if (float.IsNaN(reading.Celsius) || reading.Celsius < -50f || reading.Celsius > 200f) {
+          continue;
+        }
+
+        if (!IsCpuPackageSensor(reading.Name)) {
+          continue;
+        }
+
+        if (source == null || reading.Celsius > value) {
+          value = reading.Celsius;
+          source = reading.Name;
+        }
+      }
+
+      return source != null;
     }
 
     public static float? GetBatteryPowerWatts(BatteryTelemetry telemetry) {
@@ -378,6 +412,14 @@ namespace OmenSuperHub {
              lower.Contains("p-core") ||
              lower.Contains("e-core") ||
              lower.Contains("ia core");
+    }
+
+    static bool IsCpuPackageSensor(string name) {
+      if (string.IsNullOrWhiteSpace(name)) {
+        return false;
+      }
+
+      return name.IndexOf("CPU Package", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     static bool LooksLikeGpuSensor(string name) {

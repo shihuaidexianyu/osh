@@ -79,7 +79,6 @@ namespace OmenSuperHub {
     TextBlock smartCpuTempText;
     ProgressBar smartGpuTempBar;
     TextBlock smartGpuTempText;
-    TextBlock smartActionText;
     Slider cpuEmergencySlider;
     Slider gpuEmergencySlider;
     Slider cpuRecoverSlider;
@@ -346,6 +345,7 @@ namespace OmenSuperHub {
         Foreground = strongText,
         FontSize = 20,
         FontWeight = FontWeights.SemiBold,
+        TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 0, 0, 4)
       };
     }
@@ -355,6 +355,7 @@ namespace OmenSuperHub {
         Text = text,
         Foreground = mutedText,
         FontSize = 13,
+        TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 0, 0, 12)
       };
     }
@@ -521,10 +522,9 @@ namespace OmenSuperHub {
     }
 
     Border BuildSmartPowerPanel() {
-      var card = CreateCard(250);
+      var card = CreateCard(300);
 
       var root = new Grid();
-      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -532,7 +532,6 @@ namespace OmenSuperHub {
 
       var titleWrap = new StackPanel();
       titleWrap.Children.Add(CreateSectionTitle("智能功耗"));
-      titleWrap.Children.Add(CreateSectionSubtitle("实时状态、预算占用和温度保护可视化。"));
       Grid.SetRow(titleWrap, 0);
       root.Children.Add(titleWrap);
 
@@ -561,7 +560,7 @@ namespace OmenSuperHub {
         Foreground = mutedText,
         FontSize = 13,
         VerticalAlignment = VerticalAlignment.Center,
-        TextTrimming = TextTrimming.CharacterEllipsis
+        TextWrapping = TextWrapping.Wrap
       };
 
       Grid.SetColumn(smartStateBadge, 0);
@@ -608,15 +607,6 @@ namespace OmenSuperHub {
       thermalGrid.Children.Add(gpuThermal);
       Grid.SetRow(thermalGrid, 3);
       root.Children.Add(thermalGrid);
-
-      smartActionText = new TextBlock {
-        Text = "CPU -- | GPU -- | FanBoost --",
-        Foreground = strongText,
-        FontSize = 13,
-        TextWrapping = TextWrapping.Wrap
-      };
-      Grid.SetRow(smartActionText, 4);
-      root.Children.Add(smartActionText);
 
       card.Child = root;
       return card;
@@ -717,8 +707,9 @@ namespace OmenSuperHub {
     }
 
     Border BuildTemperatureSensorsPanel() {
-      var card = CreateCard(320);
+      var card = CreateCard(360);
       var root = new Grid();
+      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -733,10 +724,23 @@ namespace OmenSuperHub {
         Text = "正在读取...",
         Foreground = mutedText,
         FontSize = 13,
+        TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 0, 0, 8)
       };
       Grid.SetRow(temperatureSensorSummaryText, 1);
       root.Children.Add(temperatureSensorSummaryText);
+
+      var legendWrap = new WrapPanel {
+        Margin = new Thickness(0, 0, 0, 10)
+      };
+      legendWrap.Children.Add(CreateChartLegendItem(accentBlue, "CPU 控温"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.IndianRed, "GPU 控温"));
+      legendWrap.Children.Add(CreateChartLegendItem(accentOrange, "最高温"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.ForestGreen, "CPU 温度墙"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DarkOliveGreen, "GPU 温度墙"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DimGray, "CPU 限功"));
+      Grid.SetRow(legendWrap, 2);
+      root.Children.Add(legendWrap);
 
       var chartBorder = new Border {
         BorderThickness = new Thickness(1),
@@ -754,16 +758,39 @@ namespace OmenSuperHub {
       };
       chartBorder.Child = temperatureTrendCanvas;
 
-      Grid.SetRow(chartBorder, 2);
+      Grid.SetRow(chartBorder, 3);
       root.Children.Add(chartBorder);
 
       card.Child = root;
       return card;
     }
 
+    FrameworkElement CreateChartLegendItem(Brush color, string label) {
+      var row = new StackPanel {
+        Orientation = Orientation.Horizontal,
+        Margin = new Thickness(0, 0, 14, 6),
+        VerticalAlignment = VerticalAlignment.Center
+      };
+      row.Children.Add(new Border {
+        Width = 18,
+        Height = 3,
+        Background = color,
+        CornerRadius = new CornerRadius(2),
+        Margin = new Thickness(0, 0, 6, 0),
+        VerticalAlignment = VerticalAlignment.Center
+      });
+      row.Children.Add(new TextBlock {
+        Text = label,
+        Foreground = mutedText,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center
+      });
+      return row;
+    }
+
     Grid CreateSettingsGrid() {
       var grid = new Grid();
-      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
       return grid;
     }
@@ -804,7 +831,7 @@ namespace OmenSuperHub {
       var grid = new Grid {
         Margin = new Thickness(0, 0, 0, 8)
       };
-      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+      grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
       grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -812,7 +839,9 @@ namespace OmenSuperHub {
         Text = title,
         Foreground = mutedText,
         FontSize = 13,
-        VerticalAlignment = VerticalAlignment.Center
+        VerticalAlignment = VerticalAlignment.Center,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 2, 8, 2)
       };
 
       slider = new Slider {
@@ -867,7 +896,8 @@ namespace OmenSuperHub {
         Text = title,
         Foreground = mutedText,
         FontSize = 13,
-        VerticalAlignment = VerticalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Top,
+        TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 6, 8, 6)
       };
 
@@ -893,7 +923,8 @@ namespace OmenSuperHub {
         Text = title,
         Foreground = mutedText,
         FontSize = 13,
-        VerticalAlignment = VerticalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Top,
+        TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 6, 8, 6)
       };
       valueText = new TextBlock {
@@ -1381,30 +1412,6 @@ namespace OmenSuperHub {
         }
       }
 
-      if (smartActionText != null) {
-        smartActionText.Text =
-          $"CPU 上限 {(snapshot.SmartCpuLimitWatts > 0 ? $"{snapshot.SmartCpuLimitWatts}W" : "--")} | " +
-          $"GPU 档位 {FormatGpuTier(snapshot.SmartGpuTier)} | " +
-          $"FanBoost {(snapshot.SmartFanBoostActive ? "开启" : "关闭")}" +
-          Environment.NewLine +
-          $"控温源 CPU {snapshot.ControlCpuTemperature:F1}°C/{snapshot.ControlCpuTempWall:F1}°C ({SimplifySensorName(snapshot.ControlCpuSensor)}) | " +
-          $"GPU {snapshot.ControlGpuTemperature:F1}°C/{snapshot.ControlGpuTempWall:F1}°C ({SimplifySensorName(snapshot.ControlGpuSensor)}) | " +
-          $"反馈 {snapshot.ControlThermalFeedback:+0.00;-0.00;0.00}";
-      }
-    }
-
-    string SimplifySensorName(string sensorName) {
-      if (string.IsNullOrWhiteSpace(sensorName)) {
-        return "--";
-      }
-
-      if (sensorName == "fallback") {
-        return "fallback";
-      }
-
-      string[] split = sensorName.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-      string tail = split.Length == 0 ? sensorName.Trim() : split[split.Length - 1].Trim();
-      return tail.Length <= 28 ? tail : tail.Substring(0, 28) + "...";
     }
 
     void UpdateTemperatureSensorsView(DashboardSnapshot snapshot) {
@@ -1427,8 +1434,7 @@ namespace OmenSuperHub {
       AppendHistory(cpuLimitHistory, snapshot.SmartCpuLimitWatts > 0 ? snapshot.SmartCpuLimitWatts : float.NaN);
 
       temperatureSensorSummaryText.Text =
-        $"已读取 {sensors.Count} 个传感器，最高 {hottest.Celsius:F1} °C | " +
-        $"蓝=CPU控温 红=GPU控温 橙=最高温 绿虚线=温度墙 灰=CPU限功";
+        $"已读取 {sensors.Count} 个传感器，当前最高温 {hottest.Celsius:F1} °C。";
 
       DrawTemperatureTrendChart();
     }

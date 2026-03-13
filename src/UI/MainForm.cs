@@ -456,10 +456,10 @@ namespace OmenSuperHub {
     }
 
     Border BuildCoolingPanel() {
-      var card = CreateCard(170);
+      var card = CreateCard(380);
       var root = new StackPanel();
       root.Children.Add(CreateSectionTitle("高级覆盖"));
-      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。"));
+      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。这里的修改会让当前模式进入自定义。"));
 
       fanModeComboBox = CreateComboBox(fanModeItems, FanModeComboBox_SelectionChanged);
       fanControlComboBox = CreateComboBox(fanControlModeItems, FanControlComboBox_SelectionChanged);
@@ -481,16 +481,7 @@ namespace OmenSuperHub {
       AddControlRow(advancedGrid, 7, "GPU 策略", gpuPowerComboBox);
       AddControlRow(advancedGrid, 8, "GPU 锁频", gpuClockComboBox);
 
-      var advancedExpander = new Expander {
-        Header = "显示高级设置",
-        IsExpanded = false,
-        Background = Brushes.Transparent,
-        Foreground = strongText,
-        FontSize = 14,
-        FontWeight = FontWeights.SemiBold,
-        Content = advancedGrid
-      };
-      root.Children.Add(advancedExpander);
+      root.Children.Add(advancedGrid);
       card.Child = root;
       return card;
     }

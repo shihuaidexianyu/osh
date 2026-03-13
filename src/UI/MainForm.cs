@@ -733,12 +733,12 @@ namespace OmenSuperHub {
       var legendWrap = new WrapPanel {
         Margin = new Thickness(0, 0, 0, 10)
       };
-      legendWrap.Children.Add(CreateChartLegendItem(accentBlue, "CPU 控温"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.IndianRed, "GPU 控温"));
-      legendWrap.Children.Add(CreateChartLegendItem(accentOrange, "最高温"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.ForestGreen, "CPU 温度墙"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DarkOliveGreen, "GPU 温度墙"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DimGray, "CPU 限功"));
+      legendWrap.Children.Add(CreateChartLegendItem(accentBlue, "CPU 参考温度（Package）"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.IndianRed, "GPU 参考温度"));
+      legendWrap.Children.Add(CreateChartLegendItem(accentOrange, "当前最高传感器温度"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.ForestGreen, "CPU 保护温度线"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DarkOliveGreen, "GPU 保护温度线"));
+      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DimGray, "CPU 功耗限制线"));
       Grid.SetRow(legendWrap, 2);
       root.Children.Add(legendWrap);
 

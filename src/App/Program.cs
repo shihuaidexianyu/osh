@@ -23,6 +23,17 @@ namespace OmenSuperHub {
   static class Program {
     static bool suppressUsageModeAutoMark;
 
+    static string NormalizeGraphicsModeSetting(string value) {
+      switch ((value ?? string.Empty).ToLowerInvariant()) {
+        case "discrete":
+          return "discrete";
+        case "optimus":
+          return "optimus";
+        default:
+          return "hybrid";
+      }
+    }
+
     internal static void ApplyFanModeSetting(string mode) {
       if (mode == "performance") {
         fanMode = "performance";
@@ -120,11 +131,30 @@ namespace OmenSuperHub {
       SaveConfig("GpuPower");
     }
 
+    internal static void ApplyGraphicsModeSetting(string value) {
+      graphicsModeSetting = NormalizeGraphicsModeSetting(value);
+      switch (graphicsModeSetting) {
+        case "discrete":
+          SetGraphicsMode(OmenGfxMode.Discrete);
+          break;
+        case "optimus":
+          SetGraphicsMode(OmenGfxMode.Optimus);
+          break;
+        default:
+          SetGraphicsMode(OmenGfxMode.Hybrid);
+          break;
+      }
+
+      MarkUsageModeCustom();
+      SaveConfig("GraphicsMode");
+    }
+
     internal static void ApplyUsageModeSetting(string mode) {
       switch (mode) {
         case "quiet":
         case "balanced":
         case "performance":
+        case "max":
           break;
         default:
           mode = "balanced";
@@ -141,6 +171,9 @@ namespace OmenSuperHub {
             ApplyTempSensitivitySetting("low");
             ApplyCpuPowerSetting("45 W");
             ApplyGpuPowerSetting("min");
+            ApplyGpuClockSetting(0);
+            ApplySmartPowerControlSetting(true);
+            ApplyGraphicsModeSetting("hybrid");
             break;
           case "performance":
             ApplyFanModeSetting("performance");
@@ -149,6 +182,20 @@ namespace OmenSuperHub {
             ApplyTempSensitivitySetting("high");
             ApplyCpuPowerSetting("max");
             ApplyGpuPowerSetting("max");
+            ApplyGpuClockSetting(0);
+            ApplySmartPowerControlSetting(true);
+            ApplyGraphicsModeSetting("hybrid");
+            break;
+          case "max":
+            ApplyFanModeSetting("performance");
+            ApplyFanTableSetting("cool");
+            ApplyTempSensitivitySetting("realtime");
+            ApplyCpuPowerSetting("max");
+            ApplyGpuPowerSetting("max");
+            ApplyGpuClockSetting(0);
+            ApplyFanControlSetting("max");
+            ApplySmartPowerControlSetting(false);
+            ApplyGraphicsModeSetting("discrete");
             break;
           default:
             ApplyFanModeSetting("default");
@@ -157,6 +204,9 @@ namespace OmenSuperHub {
             ApplyTempSensitivitySetting("medium");
             ApplyCpuPowerSetting("65 W");
             ApplyGpuPowerSetting("med");
+            ApplyGpuClockSetting(0);
+            ApplySmartPowerControlSetting(true);
+            ApplyGraphicsModeSetting("hybrid");
             mode = "balanced";
             break;
         }
@@ -257,7 +307,7 @@ namespace OmenSuperHub {
     const int FanMaxRpm = 6400;
     const int FanRawStep = 100;
     const int FanMaxRawLevel = FanMaxRpm / FanRawStep;
-    static string usageMode = "balanced", fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
+    static string usageMode = "balanced", fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", graphicsModeSetting = "hybrid", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
     static bool smartPowerControlEnabled = true;
     static string smartPowerControlState = "balanced";
     static string smartPowerControlReason = "stable";
@@ -619,6 +669,17 @@ namespace OmenSuperHub {
     }
 
     static string InferUsageModeFromCurrentSettings() {
+      if (fanMode == "performance" &&
+          fanControl == "max" &&
+          fanTable == "cool" &&
+          tempSensitivity == "realtime" &&
+          cpuPower == "max" &&
+          gpuPower == "max" &&
+          !smartPowerControlEnabled &&
+          NormalizeGraphicsModeSetting(graphicsModeSetting) == "discrete") {
+        return "max";
+      }
+
       if (fanControl != "auto") {
         return "custom";
       }
@@ -643,7 +704,9 @@ namespace OmenSuperHub {
           fanTable == "cool" &&
           tempSensitivity == "high" &&
           cpuPower == "max" &&
-          gpuPower == "max") {
+          gpuPower == "max" &&
+          smartPowerControlEnabled &&
+          NormalizeGraphicsModeSetting(graphicsModeSetting) == "hybrid") {
         return "performance";
       }
 
@@ -856,6 +919,7 @@ namespace OmenSuperHub {
         TempSensitivity = tempSensitivity,
         CpuPowerSetting = cpuPower,
         GpuPowerSetting = gpuPower,
+        GraphicsModeSetting = graphicsModeSetting,
         GpuClockLimit = gpuClock,
         FloatingBarEnabled = floatingBar == "on",
         FloatingBarLocation = floatingBarLoc,
@@ -1144,6 +1208,19 @@ namespace OmenSuperHub {
           break;
       }
 
+      graphicsModeSetting = NormalizeGraphicsModeSetting(snapshot.GraphicsModeSetting);
+      switch (graphicsModeSetting) {
+        case "discrete":
+          SetGraphicsMode(OmenGfxMode.Discrete);
+          break;
+        case "optimus":
+          SetGraphicsMode(OmenGfxMode.Optimus);
+          break;
+        default:
+          SetGraphicsMode(OmenGfxMode.Hybrid);
+          break;
+      }
+
       gpuClock = snapshot.GpuClock;
       if (SetGPUClockLimit(gpuClock)) {
         UpdateCheckedState("gpuClockGroup", gpuClock + " MHz");
@@ -1259,6 +1336,7 @@ namespace OmenSuperHub {
         TempSensitivity = tempSensitivity,
         CpuPower = cpuPower,
         GpuPower = gpuPower,
+        GraphicsModeSetting = graphicsModeSetting,
         GpuClock = gpuClock,
         AutoStart = autoStart,
         AlreadyRead = alreadyRead,

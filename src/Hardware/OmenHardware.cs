@@ -105,6 +105,13 @@ namespace OmenSuperHub {
       }
     }
 
+    public static void SetGraphicsMode(OmenGfxMode mode) {
+      if (mode == OmenGfxMode.Unknown)
+        return;
+
+      SendOmenBiosWmi(0x52, new byte[] { (byte)mode }, 0);
+    }
+
     public static OmenGpuStatus GetGpuStatus() {
       byte[] data = SendOmenBiosWmi(0x21, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
       if (data == null || data.Length < 4)

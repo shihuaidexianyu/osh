@@ -10,6 +10,7 @@ namespace OmenSuperHub {
     public string TempSensitivity { get; set; } = "high";
     public string CpuPower { get; set; } = "max";
     public string GpuPower { get; set; } = "max";
+    public string GraphicsModeSetting { get; set; } = "hybrid";
     public int GpuClock { get; set; }
     public string AutoStart { get; set; } = "off";
     public int AlreadyRead { get; set; }
@@ -41,6 +42,7 @@ namespace OmenSuperHub {
           snapshot.TempSensitivity = ReadString(key, "TempSensitivity", snapshot.TempSensitivity);
           snapshot.CpuPower = ReadString(key, "CpuPower", snapshot.CpuPower);
           snapshot.GpuPower = ReadString(key, "GpuPower", snapshot.GpuPower);
+          snapshot.GraphicsModeSetting = ReadString(key, "GraphicsMode", snapshot.GraphicsModeSetting);
           snapshot.GpuClock = ReadInt(key, "GpuClock", snapshot.GpuClock);
           snapshot.AutoStart = ReadString(key, "AutoStart", snapshot.AutoStart);
           snapshot.AlreadyRead = ReadInt(key, "AlreadyRead", snapshot.AlreadyRead);
@@ -93,6 +95,9 @@ namespace OmenSuperHub {
               break;
             case "GpuPower":
               key.SetValue("GpuPower", snapshot.GpuPower);
+              break;
+            case "GraphicsMode":
+              key.SetValue("GraphicsMode", snapshot.GraphicsModeSetting);
               break;
             case "GpuClock":
               key.SetValue("GpuClock", snapshot.GpuClock);
@@ -194,6 +199,7 @@ namespace OmenSuperHub {
       key.SetValue("TempSensitivity", snapshot.TempSensitivity);
       key.SetValue("CpuPower", snapshot.CpuPower);
       key.SetValue("GpuPower", snapshot.GpuPower);
+      key.SetValue("GraphicsMode", snapshot.GraphicsModeSetting);
       key.SetValue("GpuClock", snapshot.GpuClock);
       key.SetValue("AutoStart", snapshot.AutoStart);
       key.SetValue("AlreadyRead", snapshot.AlreadyRead);

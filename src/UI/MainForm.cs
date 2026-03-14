@@ -42,23 +42,26 @@ namespace OmenSuperHub {
     const int ManualFanMaxRpm = 6400;
     const int ManualFanStepRpm = 100;
 
-    readonly string[] usageModeItems = { "安静", "均衡", "性能", "自定义" };
+    readonly string[] usageModeItems = { "安静", "均衡", "性能", "MAX", "自定义" };
     readonly string[] fanModeItems = { "均衡", "性能" };
     readonly string[] fanControlModeItems = { "自动", "最大风扇", "手动" };
     readonly string[] fanTableItems = { "安静模式", "降温模式" };
     readonly string[] tempSensitivityItems = { "高", "中", "低", "实时" };
     readonly string[] cpuPowerItems = { "最大", "45 W", "55 W", "65 W", "75 W", "90 W" };
     readonly string[] gpuPowerItems = { "高性能", "均衡", "节能" };
+    readonly string[] graphicsModeItems = { "混合输出", "独显直连", "Optimus" };
     readonly string[] gpuClockItems = { "还原", "1600 MHz", "1800 MHz", "2000 MHz", "2200 MHz", "2400 MHz" };
     readonly string[] floatingBarLocationItems = { "左上角", "右上角" };
 
     Window window;
     DispatcherTimer refreshTimer;
-    DispatcherTimer tuningApplyTimer;
     bool syncingControlState;
+    bool hasPendingChanges;
 
     TextBlock totalPowerText;
     TextBlock lastUpdateText;
+    Button applyChangesButton;
+    Button discardChangesButton;
 
     TextBlock leftCpuText;
     TextBlock leftGpuText;
@@ -113,6 +116,7 @@ namespace OmenSuperHub {
     ComboBox tempSensitivityComboBox;
     ComboBox cpuPowerComboBox;
     ComboBox gpuPowerComboBox;
+    ComboBox graphicsModeComboBox;
     ComboBox gpuClockComboBox;
     ComboBox floatingBarLocationComboBox;
     CheckBox smartPowerControlCheckBox;
@@ -125,8 +129,6 @@ namespace OmenSuperHub {
     readonly List<float> gpuWallTempHistory = new List<float>();
     readonly List<float> cpuLimitHistory = new List<float>();
     const int TemperatureTrendCapacity = 240;
-
-    int lastAppliedManualFanRpm = -1;
 
     MainForm() {
       EnsureWindow();
@@ -229,14 +231,6 @@ namespace OmenSuperHub {
       };
       refreshTimer.Tick += (s, e) => RefreshDashboard();
       refreshTimer.Start();
-
-      tuningApplyTimer = new DispatcherTimer {
-        Interval = TimeSpan.FromMilliseconds(350)
-      };
-      tuningApplyTimer.Tick += (s, e) => {
-        tuningApplyTimer.Stop();
-        ApplyPowerTuningFromSliders();
-      };
     }
 
     void BuildLayout() {
@@ -556,6 +550,42 @@ namespace OmenSuperHub {
       right.Children.Add(totalPowerText);
       right.Children.Add(lastUpdateText);
 
+      var actionRow = new StackPanel {
+        Orientation = Orientation.Horizontal,
+        HorizontalAlignment = HorizontalAlignment.Right,
+        Margin = new Thickness(0, 10, 0, 0)
+      };
+      applyChangesButton = new Button {
+        Content = "应用更改",
+        Padding = new Thickness(14, 8, 14, 8),
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = Brushes.White,
+        Background = accentBlue,
+        BorderBrush = accentBlue,
+        Margin = new Thickness(0, 0, 8, 0),
+        IsEnabled = false
+      };
+      applyChangesButton.Click += ApplyChangesButton_Click;
+      StyleButton(applyChangesButton);
+
+      discardChangesButton = new Button {
+        Content = "放弃更改",
+        Padding = new Thickness(14, 8, 14, 8),
+        FontSize = 13,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = strongText,
+        Background = softSlateFill,
+        BorderBrush = borderColor,
+        IsEnabled = false
+      };
+      discardChangesButton.Click += DiscardChangesButton_Click;
+      StyleButton(discardChangesButton);
+
+      actionRow.Children.Add(applyChangesButton);
+      actionRow.Children.Add(discardChangesButton);
+      right.Children.Add(actionRow);
+
       Grid.SetColumn(left, 0);
       Grid.SetColumn(right, 1);
       layout.Children.Add(left);
@@ -565,10 +595,10 @@ namespace OmenSuperHub {
     }
 
     Border BuildCoolingPanel() {
-      var card = CreateCard(380);
+      var card = CreateCard(430);
       var root = new StackPanel();
       root.Children.Add(CreateSectionTitle("高级覆盖"));
-      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。这里的修改会让当前模式进入自定义。"));
+      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。这里的修改会让当前模式进入自定义，显卡模式切换通常需要重新登录或重启后完全生效。"));
 
       fanModeComboBox = CreateComboBox(fanModeItems, FanModeComboBox_SelectionChanged);
       fanControlComboBox = CreateComboBox(fanControlModeItems, FanControlComboBox_SelectionChanged);
@@ -578,6 +608,7 @@ namespace OmenSuperHub {
 
       cpuPowerComboBox = CreateComboBox(cpuPowerItems, CpuPowerComboBox_SelectionChanged);
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
+      graphicsModeComboBox = CreateComboBox(graphicsModeItems, GraphicsModeComboBox_SelectionChanged);
       gpuClockComboBox = CreateComboBox(gpuClockItems, GpuClockComboBox_SelectionChanged);
 
       var advancedGrid = CreateSettingsGrid();
@@ -588,7 +619,8 @@ namespace OmenSuperHub {
       AddControlRow(advancedGrid, 5, "温度响应", tempSensitivityComboBox);
       AddControlRow(advancedGrid, 6, "CPU 功率", cpuPowerComboBox);
       AddControlRow(advancedGrid, 7, "GPU 策略", gpuPowerComboBox);
-      AddControlRow(advancedGrid, 8, "GPU 锁频", gpuClockComboBox);
+      AddControlRow(advancedGrid, 8, "显卡模式", graphicsModeComboBox);
+      AddControlRow(advancedGrid, 9, "GPU 锁频", gpuClockComboBox);
 
       root.Children.Add(advancedGrid);
       card.Child = root;
@@ -596,7 +628,7 @@ namespace OmenSuperHub {
     }
 
     Border BuildPerformancePanel() {
-      var card = CreateCard(220);
+      var card = CreateCard(246);
       var grid = CreateSettingsGrid();
       AddTitleToGrid(grid, "主模式", "先选择目标，再让系统自动平衡温度、噪声和功耗。");
 
@@ -612,7 +644,7 @@ namespace OmenSuperHub {
       smartPowerControlCheckBox.Unchecked += SmartPowerControlCheckBox_Changed;
 
       var hintText = new TextBlock {
-        Text = "安静：优先低噪声和低功耗 | 均衡：默认日常模式 | 性能：优先负载表现，但仍受温度墙保护",
+        Text = "安静：优先低噪声和低功耗 | 均衡：默认日常模式 | 性能：优先负载表现，但仍受温度墙保护 | MAX：关闭智能限制、强制最大风扇并切到独显直连",
         Foreground = mutedText,
         FontSize = 12,
         TextWrapping = TextWrapping.Wrap,
@@ -1132,11 +1164,11 @@ namespace OmenSuperHub {
       float totalPower = snapshot.CpuPowerWatts + snapshot.GpuPowerWatts;
       if (!snapshot.AcOnline) {
         float? batteryDischarge = GetBatteryDischargePowerWatts(snapshot.Battery);
-        if (batteryDischarge.HasValue)
+      if (batteryDischarge.HasValue)
           totalPower = batteryDischarge.Value;
       }
       totalPowerText.Text = $"{totalPower:F1} W";
-      lastUpdateText.Text = $"最近刷新: {DateTime.Now:HH:mm:ss}";
+      lastUpdateText.Text = hasPendingChanges ? "有未应用的更改" : $"最近刷新: {DateTime.Now:HH:mm:ss}";
 
       leftCpuText.Text = $"{snapshot.CpuTemperature:F1} °C | {snapshot.CpuPowerWatts:F1} W";
       leftGpuText.Text = snapshot.MonitorGpu ? $"{snapshot.GpuTemperature:F1} °C | {snapshot.GpuPowerWatts:F1} W" : "监控关闭";
@@ -1153,8 +1185,41 @@ namespace OmenSuperHub {
       UpdateTemperatureSensorsView(snapshot);
       UpdateSmartPowerVisual(snapshot);
 
-      if (!IsControlInteractionActive()) {
+      if (!hasPendingChanges && !IsControlInteractionActive()) {
         SyncControlState(snapshot);
+      }
+    }
+
+    void MarkPendingChanges(bool setCustomUsageMode = false) {
+      if (setCustomUsageMode && usageModeComboBox != null) {
+        syncingControlState = true;
+        try {
+          SelectComboItem(usageModeComboBox, "自定义");
+        } finally {
+          syncingControlState = false;
+        }
+      }
+
+      hasPendingChanges = true;
+      UpdatePendingChangeButtons();
+    }
+
+    void ClearPendingChanges() {
+      hasPendingChanges = false;
+      UpdatePendingChangeButtons();
+    }
+
+    void UpdatePendingChangeButtons() {
+      if (applyChangesButton != null) {
+        applyChangesButton.IsEnabled = hasPendingChanges;
+        applyChangesButton.Opacity = hasPendingChanges ? 1.0 : 0.55;
+      }
+      if (discardChangesButton != null) {
+        discardChangesButton.IsEnabled = hasPendingChanges;
+        discardChangesButton.Opacity = hasPendingChanges ? 1.0 : 0.55;
+      }
+      if (lastUpdateText != null && hasPendingChanges) {
+        lastUpdateText.Text = "有未应用的更改";
       }
     }
 
@@ -1166,6 +1231,7 @@ namespace OmenSuperHub {
       if (tempSensitivityComboBox?.IsDropDownOpen == true) return true;
       if (cpuPowerComboBox?.IsDropDownOpen == true) return true;
       if (gpuPowerComboBox?.IsDropDownOpen == true) return true;
+      if (graphicsModeComboBox?.IsDropDownOpen == true) return true;
       if (gpuClockComboBox?.IsDropDownOpen == true) return true;
       if (floatingBarLocationComboBox?.IsDropDownOpen == true) return true;
 
@@ -1208,12 +1274,18 @@ namespace OmenSuperHub {
         SelectComboItem(tempSensitivityComboBox, ConvertTempSensitivity(snapshot.TempSensitivity));
         SelectComboItem(cpuPowerComboBox, snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting);
         SelectComboItem(gpuPowerComboBox, ConvertGpuPowerValue(snapshot.GpuPowerSetting));
+        SelectComboItem(graphicsModeComboBox, ConvertGraphicsModeSetting(snapshot.GraphicsModeSetting));
+        if (graphicsModeComboBox != null) {
+          bool canSwitchGraphics = snapshot.SystemDesignData != null && snapshot.SystemDesignData.GraphicsSwitcherSupported;
+          graphicsModeComboBox.IsEnabled = canSwitchGraphics;
+        }
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
         smartPowerControlCheckBox.IsChecked = snapshot.SmartPowerControlEnabled;
         SyncPowerTuningControls();
 
         bool overlayEnabled = snapshot.FloatingBarEnabled;
         floatingBarButton.Content = overlayEnabled ? "浮窗: 开启" : "浮窗: 关闭";
+        floatingBarButton.Tag = overlayEnabled;
         floatingBarButton.Background = overlayEnabled
           ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
           : subtleFill;
@@ -1233,18 +1305,134 @@ namespace OmenSuperHub {
       }
     }
 
+    void ApplyUsageModeToControls(string mode) {
+      syncingControlState = true;
+      try {
+        switch (mode) {
+          case "quiet":
+            SelectComboItem(fanModeComboBox, "均衡");
+            SelectComboItem(fanControlComboBox, "自动");
+            SetManualFanSliderEnabled(false);
+            SelectComboItem(fanTableComboBox, "安静模式");
+            SelectComboItem(tempSensitivityComboBox, "低");
+            SelectComboItem(cpuPowerComboBox, "45 W");
+            SelectComboItem(gpuPowerComboBox, "节能");
+            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(gpuClockComboBox, "还原");
+            if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
+            break;
+          case "performance":
+            SelectComboItem(fanModeComboBox, "性能");
+            SelectComboItem(fanControlComboBox, "自动");
+            SetManualFanSliderEnabled(false);
+            SelectComboItem(fanTableComboBox, "降温模式");
+            SelectComboItem(tempSensitivityComboBox, "高");
+            SelectComboItem(cpuPowerComboBox, "最大");
+            SelectComboItem(gpuPowerComboBox, "高性能");
+            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(gpuClockComboBox, "还原");
+            if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
+            break;
+          case "max":
+            SelectComboItem(fanModeComboBox, "性能");
+            SelectComboItem(fanControlComboBox, "最大风扇");
+            SetManualFanSliderEnabled(false);
+            SelectComboItem(fanTableComboBox, "降温模式");
+            SelectComboItem(tempSensitivityComboBox, "实时");
+            SelectComboItem(cpuPowerComboBox, "最大");
+            SelectComboItem(gpuPowerComboBox, "高性能");
+            SelectComboItem(graphicsModeComboBox, "独显直连");
+            SelectComboItem(gpuClockComboBox, "还原");
+            if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = false;
+            break;
+          default:
+            SelectComboItem(fanModeComboBox, "均衡");
+            SelectComboItem(fanControlComboBox, "自动");
+            SetManualFanSliderEnabled(false);
+            SelectComboItem(fanTableComboBox, "安静模式");
+            SelectComboItem(tempSensitivityComboBox, "中");
+            SelectComboItem(cpuPowerComboBox, "65 W");
+            SelectComboItem(gpuPowerComboBox, "均衡");
+            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(gpuClockComboBox, "还原");
+            if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
+            break;
+        }
+      } finally {
+        syncingControlState = false;
+      }
+    }
+
+    void ApplyChangesButton_Click(object sender, RoutedEventArgs e) {
+      if (!hasPendingChanges) {
+        return;
+      }
+
+      string selectedUsageMode = usageModeComboBox?.SelectedItem == null
+        ? "balanced"
+        : ConvertUsageModeBack(usageModeComboBox.SelectedItem.ToString());
+
+      if (selectedUsageMode != "custom") {
+        Program.ApplyUsageModeSetting(selectedUsageMode);
+      } else {
+        Program.ApplyFanModeSetting(fanModeComboBox?.SelectedItem?.ToString() == "性能" ? "performance" : "default");
+
+        string fanControlSelection = fanControlComboBox?.SelectedItem?.ToString() ?? "自动";
+        if (fanControlSelection == "自动") {
+          Program.ApplyFanControlSetting("auto");
+        } else if (fanControlSelection == "最大风扇") {
+          Program.ApplyFanControlSetting("max");
+        } else {
+          int rpm = manualFanRpmSlider == null ? ManualFanMinRpm : (int)Math.Round(manualFanRpmSlider.Value);
+          Program.ApplyFanControlSetting($"{rpm} RPM");
+        }
+
+        Program.ApplyFanTableSetting(fanTableComboBox?.SelectedItem?.ToString() == "降温模式" ? "cool" : "silent");
+        Program.ApplyTempSensitivitySetting(ConvertTempSensitivityBack(tempSensitivityComboBox?.SelectedItem?.ToString() ?? "高"));
+
+        string cpuPowerSelection = cpuPowerComboBox?.SelectedItem?.ToString() ?? "最大";
+        Program.ApplyCpuPowerSetting(cpuPowerSelection == "最大" ? "max" : cpuPowerSelection);
+        Program.ApplyGpuPowerSetting(ConvertGpuPowerValueBack(gpuPowerComboBox?.SelectedItem?.ToString() ?? "节能"));
+        Program.ApplyGraphicsModeSetting(ConvertGraphicsModeSettingBack(graphicsModeComboBox?.SelectedItem?.ToString() ?? "混合输出"));
+
+        string gpuClockSelection = gpuClockComboBox?.SelectedItem?.ToString() ?? "还原";
+        Program.ApplyGpuClockSetting(gpuClockSelection == "还原" ? 0 : int.Parse(gpuClockSelection.Replace(" MHz", string.Empty)));
+        Program.ApplySmartPowerControlSetting(smartPowerControlCheckBox != null && smartPowerControlCheckBox.IsChecked == true);
+      }
+
+      bool floatingEnabled = floatingBarButton != null && floatingBarButton.Tag is bool tagValue && tagValue;
+      Program.ApplyFloatingBarSetting(floatingEnabled);
+      if (floatingBarLocationComboBox?.SelectedItem != null) {
+        Program.ApplyFloatingBarLocationSetting(floatingBarLocationComboBox.SelectedItem.ToString() == "右上角" ? "right" : "left");
+      }
+
+      var tuning = BuildPowerTuningFromSliders();
+      if (tuning != null) {
+        Program.ApplyPowerControlTuning(tuning);
+      }
+
+      ClearPendingChanges();
+      RefreshDashboard();
+    }
+
+    void DiscardChangesButton_Click(object sender, RoutedEventArgs e) {
+      var snapshot = Program.GetDashboardSnapshot();
+      SyncControlState(snapshot);
+      ClearPendingChanges();
+      RefreshDashboard();
+    }
+
     void UsageModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || usageModeComboBox.SelectedItem == null) return;
       string mode = ConvertUsageModeBack(usageModeComboBox.SelectedItem.ToString());
       if (mode == "custom") return;
-      Program.ApplyUsageModeSetting(mode);
-      RefreshDashboard();
+      ApplyUsageModeToControls(mode);
+      MarkPendingChanges();
     }
 
     void FanModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || fanModeComboBox.SelectedItem == null) return;
-      Program.ApplyFanModeSetting(fanModeComboBox.SelectedItem.ToString() == "性能" ? "performance" : "default");
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void FanControlComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -1252,15 +1440,12 @@ namespace OmenSuperHub {
       string selected = fanControlComboBox.SelectedItem.ToString();
       if (selected == "自动") {
         SetManualFanSliderEnabled(false);
-        Program.ApplyFanControlSetting("auto");
       } else if (selected == "最大风扇") {
         SetManualFanSliderEnabled(false);
-        Program.ApplyFanControlSetting("max");
       } else {
         SetManualFanSliderEnabled(true);
-        ApplyManualFanFromSlider(force: true);
       }
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void ManualFanRpmSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) {
@@ -1273,53 +1458,55 @@ namespace OmenSuperHub {
       if (fanControlComboBox.SelectedItem.ToString() != "手动") {
         return;
       }
-
-      ApplyManualFanFromSlider();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void FanTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || fanTableComboBox.SelectedItem == null) return;
-      Program.ApplyFanTableSetting(fanTableComboBox.SelectedItem.ToString() == "降温模式" ? "cool" : "silent");
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void TempSensitivityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || tempSensitivityComboBox.SelectedItem == null) return;
-      Program.ApplyTempSensitivitySetting(ConvertTempSensitivityBack(tempSensitivityComboBox.SelectedItem.ToString()));
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void CpuPowerComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || cpuPowerComboBox.SelectedItem == null) return;
-      string selected = cpuPowerComboBox.SelectedItem.ToString();
-      Program.ApplyCpuPowerSetting(selected == "最大" ? "max" : selected);
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void GpuPowerComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || gpuPowerComboBox.SelectedItem == null) return;
-      Program.ApplyGpuPowerSetting(ConvertGpuPowerValueBack(gpuPowerComboBox.SelectedItem.ToString()));
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
+    }
+
+    void GraphicsModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+      if (syncingControlState || graphicsModeComboBox.SelectedItem == null) return;
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void GpuClockComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || gpuClockComboBox.SelectedItem == null) return;
-      string selected = gpuClockComboBox.SelectedItem.ToString();
-      Program.ApplyGpuClockSetting(selected == "还原" ? 0 : int.Parse(selected.Replace(" MHz", string.Empty)));
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void SmartPowerControlCheckBox_Changed(object sender, RoutedEventArgs e) {
       if (syncingControlState || smartPowerControlCheckBox == null || !smartPowerControlCheckBox.IsChecked.HasValue) return;
-      Program.ApplySmartPowerControlSetting(smartPowerControlCheckBox.IsChecked.Value);
-      RefreshDashboard();
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void FloatingBarButton_Click(object sender, RoutedEventArgs e) {
       if (syncingControlState) return;
-      var snapshot = Program.GetDashboardSnapshot();
-      Program.ApplyFloatingBarSetting(!snapshot.FloatingBarEnabled);
-      RefreshDashboard();
+      bool currentValue = floatingBarButton != null && floatingBarButton.Tag is bool tagValue && tagValue;
+      bool nextValue = !currentValue;
+      floatingBarButton.Tag = nextValue;
+      floatingBarButton.Content = nextValue ? "浮窗: 开启" : "浮窗: 关闭";
+      floatingBarButton.Background = nextValue
+        ? new SolidColorBrush(Color.FromRgb(229, 247, 240))
+        : subtleFill;
+      floatingBarButton.Foreground = nextValue ? accentGreen : strongText;
+      MarkPendingChanges();
     }
 
     void FloatingBarLocationComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -1327,9 +1514,7 @@ namespace OmenSuperHub {
         return;
       }
 
-      string selected = floatingBarLocationComboBox.SelectedItem.ToString();
-      Program.ApplyFloatingBarLocationSetting(selected == "右上角" ? "right" : "left");
-      RefreshDashboard();
+      MarkPendingChanges();
     }
 
     void StrategySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) {
@@ -1337,12 +1522,10 @@ namespace OmenSuperHub {
         UpdateThresholdValueText(slider);
       }
 
-      if (syncingControlState || tuningApplyTimer == null) {
+      if (syncingControlState) {
         return;
       }
-
-      tuningApplyTimer.Stop();
-      tuningApplyTimer.Start();
+      MarkPendingChanges();
     }
 
     void UpdateThresholdValueText(Slider slider) {
@@ -1397,12 +1580,12 @@ namespace OmenSuperHub {
       UpdateThresholdValueText(batteryGuardReleaseSlider);
     }
 
-    void ApplyPowerTuningFromSliders() {
+    PowerControlTuning BuildPowerTuningFromSliders() {
       if (cpuEmergencySlider == null) {
-        return;
+        return null;
       }
 
-      var tuning = new PowerControlTuning {
+      return new PowerControlTuning {
         CpuEmergencyTempC = (float)cpuEmergencySlider.Value,
         GpuEmergencyTempC = (float)gpuEmergencySlider.Value,
         CpuRecoverTempC = (float)cpuRecoverSlider.Value,
@@ -1414,40 +1597,38 @@ namespace OmenSuperHub {
         BatteryGuardTriggerWatts = (float)batteryGuardTriggerSlider.Value,
         BatteryGuardReleaseWatts = (float)batteryGuardReleaseSlider.Value
       };
-
-      Program.ApplyPowerControlTuning(tuning);
-
-      syncingControlState = true;
-      try {
-        SyncPowerTuningControls();
-      } finally {
-        syncingControlState = false;
-      }
     }
 
     void ResetTuningButton_Click(object sender, RoutedEventArgs e) {
-      Program.ResetPowerControlTuningToDefault();
+      var tuning = Program.GetDefaultPowerControlTuning();
       syncingControlState = true;
       try {
-        SyncPowerTuningControls();
+        if (tuning != null) {
+          cpuEmergencySlider.Value = tuning.CpuEmergencyTempC;
+          gpuEmergencySlider.Value = tuning.GpuEmergencyTempC;
+          cpuRecoverSlider.Value = tuning.CpuRecoverTempC;
+          gpuRecoverSlider.Value = tuning.GpuRecoverTempC;
+          cpuFanBoostOnSlider.Value = tuning.CpuFanBoostOnTempC;
+          gpuFanBoostOnSlider.Value = tuning.GpuFanBoostOnTempC;
+          cpuFanBoostOffSlider.Value = tuning.CpuFanBoostOffTempC;
+          gpuFanBoostOffSlider.Value = tuning.GpuFanBoostOffTempC;
+          batteryGuardTriggerSlider.Value = tuning.BatteryGuardTriggerWatts;
+          batteryGuardReleaseSlider.Value = tuning.BatteryGuardReleaseWatts;
+          UpdateThresholdValueText(cpuEmergencySlider);
+          UpdateThresholdValueText(gpuEmergencySlider);
+          UpdateThresholdValueText(cpuRecoverSlider);
+          UpdateThresholdValueText(gpuRecoverSlider);
+          UpdateThresholdValueText(cpuFanBoostOnSlider);
+          UpdateThresholdValueText(gpuFanBoostOnSlider);
+          UpdateThresholdValueText(cpuFanBoostOffSlider);
+          UpdateThresholdValueText(gpuFanBoostOffSlider);
+          UpdateThresholdValueText(batteryGuardTriggerSlider);
+          UpdateThresholdValueText(batteryGuardReleaseSlider);
+        }
       } finally {
         syncingControlState = false;
       }
-      RefreshDashboard();
-    }
-
-    void ApplyManualFanFromSlider(bool force = false) {
-      if (manualFanRpmSlider == null) {
-        return;
-      }
-
-      int rpm = (int)Math.Round(manualFanRpmSlider.Value);
-      if (!force && rpm == lastAppliedManualFanRpm) {
-        return;
-      }
-
-      lastAppliedManualFanRpm = rpm;
-      Program.ApplyFanControlSetting($"{rpm} RPM");
+      MarkPendingChanges(setCustomUsageMode: true);
     }
 
     void SetManualFanSliderEnabled(bool enabled) {
@@ -1834,6 +2015,8 @@ namespace OmenSuperHub {
       switch ((value ?? string.Empty).ToLowerInvariant()) {
         case "quiet":
           return "安静";
+        case "max":
+          return "MAX";
         case "performance":
           return "性能";
         case "custom":
@@ -1847,6 +2030,8 @@ namespace OmenSuperHub {
       switch (value) {
         case "安静":
           return "quiet";
+        case "MAX":
+          return "max";
         case "性能":
           return "performance";
         case "自定义":
@@ -1866,6 +2051,28 @@ namespace OmenSuperHub {
       if (value == "高性能") return "max";
       if (value == "均衡") return "med";
       return "min";
+    }
+
+    string ConvertGraphicsModeSetting(string value) {
+      switch ((value ?? string.Empty).ToLowerInvariant()) {
+        case "discrete":
+          return "独显直连";
+        case "optimus":
+          return "Optimus";
+        default:
+          return "混合输出";
+      }
+    }
+
+    string ConvertGraphicsModeSettingBack(string value) {
+      switch (value) {
+        case "独显直连":
+          return "discrete";
+        case "Optimus":
+          return "optimus";
+        default:
+          return "hybrid";
+      }
     }
 
     string ConvertTempSensitivity(string value) {

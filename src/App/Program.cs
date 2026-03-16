@@ -291,6 +291,7 @@ namespace OmenSuperHub {
     static readonly ProcessCommandService processCommandService = new ProcessCommandService();
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
+    static readonly SettingsRestoreService settingsRestoreService = new SettingsRestoreService(settingsService);
     static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
     static readonly DashboardSnapshotBuilder dashboardSnapshotBuilder = new DashboardSnapshotBuilder();
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
@@ -836,10 +837,6 @@ namespace OmenSuperHub {
       return false;
     }
 
-    static bool SetGPUClockLimit(int freq) {
-      return hardwareControlService.SetGpuClockLimit(freq);
-    }
-
     static ProcessResult ExecuteCommand(string command) {
       return processCommandService.Execute(command);
     }
@@ -1001,176 +998,74 @@ namespace OmenSuperHub {
     }
 
     static void RestoreConfig() {
-      AppSettingsSnapshot snapshot;
-      if (!settingsService.TryLoadConfig(out snapshot)) {
+      if (!settingsRestoreService.TryLoadRestorePlan(out SettingsRestorePlan plan)) {
         ApplyUsageModeSetting("balanced");
         LoadPowerControlTuning();
         return;
       }
 
-      usageMode = RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseUsageMode(snapshot.UsageMode));
-      ApplyControlSettings(RuntimeControlSettings.FromSnapshot(snapshot));
+      usageMode = plan.UsageMode;
+      ApplyControlSettings(plan.ControlSettings);
+      ApplyRestoredSettings(plan);
 
-      if (fanTable.Contains("cool")) {
-        LoadFanConfig("cool.txt");
-        UpdateCheckedState("fanTableGroup", "降温模式");
-      } else if (fanTable.Contains("silent")) {
-        LoadFanConfig("silent.txt");
-        UpdateCheckedState("fanTableGroup", "安静模式");
+      if (!smartPowerControlEnabled) {
+        ApplySmartPowerControlDisabledState();
       }
 
-      if (fanMode.Contains("performance")) {
-        UpdateCheckedState("fanModeGroup", "性能模式");
-      } else if (fanMode.Contains("default")) {
-        UpdateCheckedState("fanModeGroup", "均衡模式");
+      LoadPowerControlTuning();
+      usageMode = InferUsageModeFromCurrentSettings();
+    }
+
+    static void ApplyRestoredSettings(SettingsRestorePlan plan) {
+      if (plan == null) {
+        return;
       }
 
-      if (fanControl == "auto") {
-        UpdateCheckedState("fanControlGroup", "自动");
-      } else if (fanControl.Contains("max")) {
-        UpdateCheckedState("fanControlGroup", "最大风扇");
-      } else if (fanControl.Contains(" RPM")) {
-        UpdateCheckedState("fanControlGroup", fanControl);
+      autoStart = plan.AutoStart;
+      if (plan.EnableAutoStart) {
+        AutoStartEnable();
       }
 
-      switch (tempSensitivity) {
-        case "realtime":
-          UpdateCheckedState("tempSensitivityGroup", "实时");
-          break;
-        case "high":
-          UpdateCheckedState("tempSensitivityGroup", "高");
-          break;
-        case "medium":
-          UpdateCheckedState("tempSensitivityGroup", "中");
-          break;
-        case "low":
-          UpdateCheckedState("tempSensitivityGroup", "低");
-          break;
-      }
-
-      if (cpuPower == "max") {
-        UpdateCheckedState("cpuPowerGroup", "最大");
-      } else if (cpuPower.Contains(" W")) {
-        int value = int.Parse(cpuPower.Replace(" W", "").Trim());
-        if (value >= 5 && value <= 254) {
-          UpdateCheckedState("cpuPowerGroup", cpuPower);
-        }
-      }
-
-      switch (gpuPower) {
-        case "max":
-          UpdateCheckedState("gpuPowerGroup", "高性能");
-          break;
-        case "med":
-          UpdateCheckedState("gpuPowerGroup", "均衡");
-          break;
-        case "min":
-          UpdateCheckedState("gpuPowerGroup", "节能");
-          break;
-      }
-
-      if (SetGPUClockLimit(gpuClock)) {
-        UpdateCheckedState("gpuClockGroup", gpuClock + " MHz");
-      } else {
-        UpdateCheckedState("gpuClockGroup", "还原");
-      }
-
-      autoStart = snapshot.AutoStart;
-      switch (autoStart) {
-        case "on":
-          AutoStartEnable();
-          UpdateCheckedState("autoStartGroup", "开启");
-          break;
-        case "off":
-          UpdateCheckedState("autoStartGroup", "关闭");
-          break;
-      }
-
-      alreadyRead = snapshot.AlreadyRead;
-
-      customIcon = snapshot.CustomIcon;
-      RefreshShellStatus();
-      switch (customIcon) {
-        case "original":
-          UpdateCheckedState("customIconGroup", "原版");
-          break;
-        case "custom":
-          UpdateCheckedState("customIconGroup", "自定义图标");
-          break;
-        case "dynamic":
-          UpdateCheckedState("customIconGroup", "动态图标");
-          break;
-      }
-
-      omenKey = snapshot.OmenKey;
-      switch (omenKey) {
-        case "default":
-          backgroundScheduler?.SetFloatingToggleEnabled(false);
-          hardwareControlService.DisableOmenKey();
-          hardwareControlService.EnableOmenKey(omenKey);
-          UpdateCheckedState("omenKeyGroup", "默认");
-          break;
-        case "custom":
-          backgroundScheduler?.SetFloatingToggleEnabled(true);
-          hardwareControlService.DisableOmenKey();
-          hardwareControlService.EnableOmenKey(omenKey);
-          UpdateCheckedState("omenKeyGroup", "切换浮窗显示");
-          break;
-        case "none":
-          backgroundScheduler?.SetFloatingToggleEnabled(false);
-          hardwareControlService.DisableOmenKey();
-          UpdateCheckedState("omenKeyGroup", "取消绑定");
-          break;
-      }
+      alreadyRead = plan.AlreadyRead;
+      customIcon = plan.CustomIcon;
+      ApplyRestoredOmenKey(plan.OmenKey);
 
       libreComputer.IsGpuEnabled = true;
       monitorGPU = true;
+      monitorFan = plan.MonitorFan;
+      textSize = plan.FloatingBarSize;
+      floatingBarLoc = plan.FloatingBarLocation;
+      floatingBar = plan.FloatingBar;
 
-      monitorFan = snapshot.MonitorFan;
-      if (monitorFan) {
-        UpdateCheckedState("monitorFanGroup", "开启风扇监控");
-      } else {
-        UpdateCheckedState("monitorFanGroup", "关闭风扇监控");
-      }
-
-      if (!smartPowerControlEnabled) {
-        powerController.Reset();
-        smartPowerControlState = "manual";
-        smartPowerControlReason = "disabled";
-        smartFanBoostActive = false;
-      }
-      LoadPowerControlTuning();
-      usageMode = InferUsageModeFromCurrentSettings();
-
-      textSize = snapshot.FloatingBarSize;
       RefreshShellStatus();
-      switch (textSize) {
-        case 24:
-          UpdateCheckedState("floatingBarSizeGroup", "24号");
-          break;
-        case 36:
-          UpdateCheckedState("floatingBarSizeGroup", "36号");
-          break;
-        case 48:
-          UpdateCheckedState("floatingBarSizeGroup", "48号");
-          break;
+      ApplyCheckedMenuSelections(plan.CheckedMenuSelections);
+    }
+
+    static void ApplyRestoredOmenKey(string value) {
+      omenKey = value;
+      bool enableFloatingToggle = omenKey == "custom";
+      backgroundScheduler?.SetFloatingToggleEnabled(enableFloatingToggle);
+      hardwareControlService.DisableOmenKey();
+      if (omenKey != "none") {
+        hardwareControlService.EnableOmenKey(omenKey);
+      }
+    }
+
+    static void ApplyCheckedMenuSelections(IEnumerable<CheckedMenuSelection> selections) {
+      if (selections == null) {
+        return;
       }
 
-      floatingBarLoc = snapshot.FloatingBarLocation;
-      RefreshShellStatus();
-      if (floatingBarLoc == "left") {
-        UpdateCheckedState("floatingBarLocGroup", "左上角");
-      } else {
-        UpdateCheckedState("floatingBarLocGroup", "右上角");
+      foreach (CheckedMenuSelection selection in selections) {
+        UpdateCheckedState(selection.Group, selection.ItemText);
       }
+    }
 
-      floatingBar = snapshot.FloatingBar;
-      RefreshShellStatus();
-      if (floatingBar == "on") {
-        UpdateCheckedState("floatingBarGroup", "显示浮窗");
-      } else {
-        UpdateCheckedState("floatingBarGroup", "关闭浮窗");
-      }
+    static void ApplySmartPowerControlDisabledState() {
+      powerController.Reset();
+      smartPowerControlState = "manual";
+      smartPowerControlReason = "disabled";
+      smartFanBoostActive = false;
     }
 
     static AppSettingsSnapshot CreateSettingsSnapshot() {

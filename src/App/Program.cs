@@ -292,9 +292,11 @@ namespace OmenSuperHub {
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
+    static readonly DashboardSnapshotBuilder dashboardSnapshotBuilder = new DashboardSnapshotBuilder();
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
     static readonly HardwareTelemetryService hardwareTelemetryService = new HardwareTelemetryService(libreComputer, hardwareGateway);
     static readonly AppShellService shellService = new AppShellService();
+    static readonly ShellStatusBuilder shellStatusBuilder = new ShellStatusBuilder();
     static bool monitorGPU = true, monitorFan = true, powerOnline = true;
     static List<int> fanSpeedNow = new List<int> { 20, 23 };
     static List<TemperatureSensorReading> currentTemperatureSensors = new List<TemperatureSensorReading>();
@@ -892,7 +894,11 @@ namespace OmenSuperHub {
     }
 
     internal static DashboardSnapshot GetDashboardSnapshot() {
-      return new DashboardSnapshot {
+      return dashboardSnapshotBuilder.Build(CreateRuntimeStateSnapshot());
+    }
+
+    static AppRuntimeState CreateRuntimeStateSnapshot() {
+      return new AppRuntimeState {
         CpuTemperature = CPUTemp,
         GpuTemperature = GPUTemp,
         CpuPowerWatts = CPUPower,
@@ -912,44 +918,15 @@ namespace OmenSuperHub {
         GpuClockLimit = gpuClock,
         FloatingBarEnabled = floatingBar == "on",
         FloatingBarLocation = floatingBarLoc,
+        FloatingBarTextSize = textSize,
+        CustomIconMode = customIcon,
         GraphicsMode = currentGfxMode,
-        GpuStatus = currentGpuStatus == null ? null : new OmenGpuStatus {
-          CustomTgpEnabled = currentGpuStatus.CustomTgpEnabled,
-          PpabEnabled = currentGpuStatus.PpabEnabled,
-          DState = currentGpuStatus.DState,
-          ThermalThreshold = currentGpuStatus.ThermalThreshold,
-          RawData = currentGpuStatus.RawData == null ? null : (byte[])currentGpuStatus.RawData.Clone()
-        },
-        SystemDesignData = currentSystemDesignData == null ? null : new OmenSystemDesignData {
-          PowerFlags = currentSystemDesignData.PowerFlags,
-          ThermalPolicyVersion = currentSystemDesignData.ThermalPolicyVersion,
-          FeatureFlags = currentSystemDesignData.FeatureFlags,
-          DefaultPl4 = currentSystemDesignData.DefaultPl4,
-          BiosOverclockingSupport = currentSystemDesignData.BiosOverclockingSupport,
-          MiscFlags = currentSystemDesignData.MiscFlags,
-          DefaultConcurrentTdp = currentSystemDesignData.DefaultConcurrentTdp,
-          SoftwareFanControlSupported = currentSystemDesignData.SoftwareFanControlSupported,
-          ExtremeModeSupported = currentSystemDesignData.ExtremeModeSupported,
-          ExtremeModeUnlocked = currentSystemDesignData.ExtremeModeUnlocked,
-          GraphicsSwitcherSupported = currentSystemDesignData.GraphicsSwitcherSupported,
-          RawData = currentSystemDesignData.RawData == null ? null : (byte[])currentSystemDesignData.RawData.Clone()
-        },
+        GpuStatus = currentGpuStatus,
+        SystemDesignData = currentSystemDesignData,
         SmartAdapterStatus = currentSmartAdapterStatus,
-        FanTypeInfo = currentFanTypeInfo == null ? null : new OmenFanTypeInfo {
-          RawValue = currentFanTypeInfo.RawValue,
-          Fan1Type = currentFanTypeInfo.Fan1Type,
-          Fan2Type = currentFanTypeInfo.Fan2Type
-        },
+        FanTypeInfo = currentFanTypeInfo,
         KeyboardType = currentKeyboardType,
-        Battery = currentBatteryTelemetry == null ? null : new BatteryTelemetry {
-          PowerOnline = currentBatteryTelemetry.PowerOnline,
-          Charging = currentBatteryTelemetry.Charging,
-          Discharging = currentBatteryTelemetry.Discharging,
-          DischargeRateMilliwatts = currentBatteryTelemetry.DischargeRateMilliwatts,
-          ChargeRateMilliwatts = currentBatteryTelemetry.ChargeRateMilliwatts,
-          RemainingCapacityMilliwattHours = currentBatteryTelemetry.RemainingCapacityMilliwattHours,
-          VoltageMillivolts = currentBatteryTelemetry.VoltageMillivolts
-        },
+        Battery = currentBatteryTelemetry,
         BatteryPercent = (int)Math.Round(SystemInformation.PowerStatus.BatteryLifePercent * 100),
         SmartPowerControlEnabled = smartPowerControlEnabled,
         SmartPowerControlState = smartPowerControlState,
@@ -995,93 +972,10 @@ namespace OmenSuperHub {
     }
 
     static void RefreshShellStatus() {
-      shellService.RefreshStatus(CreateAppShellStatus());
-    }
-
-    static AppShellStatus CreateAppShellStatus() {
-      return new AppShellStatus {
-        IconMode = customIcon,
-        TrayText = BuildTraySummaryText(),
-        DynamicIconValue = (int)CPUTemp,
-        CustomIconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "custom.ico"),
-        FloatingVisible = floatingBar == "on",
-        FloatingText = BuildMonitorText(),
-        FloatingTextSize = textSize,
-        FloatingLocation = floatingBarLoc,
-        MainWindowVisible = MainForm.IsVisibleOnScreen
-      };
-    }
-
-    static string FormatGfxMode(OmenGfxMode mode) {
-      switch (mode) {
-        case OmenGfxMode.Hybrid:
-          return "Hybrid";
-        case OmenGfxMode.Discrete:
-          return "Discrete";
-        case OmenGfxMode.Optimus:
-          return "Optimus";
-        default:
-          return "Unknown";
-      }
-    }
-
-    static string FormatGpuControl(OmenGpuStatus status) {
-      if (status == null)
-        return "Unknown";
-
-      string powerMode;
-      if (status.CustomTgpEnabled && status.PpabEnabled)
-        powerMode = "cTGP+PPAB";
-      else if (status.CustomTgpEnabled)
-        powerMode = "cTGP";
-      else
-        powerMode = "BaseTGP";
-
-      return $"{powerMode} D{status.DState}";
-    }
-
-    static string FormatAdapterStatus(OmenSmartAdapterStatus status) {
-      switch (status) {
-        case OmenSmartAdapterStatus.MeetsRequirement:
-          return "OK";
-        case OmenSmartAdapterStatus.BatteryPower:
-          return "Battery";
-        case OmenSmartAdapterStatus.BelowRequirement:
-          return "Low";
-        case OmenSmartAdapterStatus.NotFunctioning:
-          return "Fault";
-        case OmenSmartAdapterStatus.NoSupport:
-          return "N/A";
-        default:
-          return "?";
-      }
-    }
-
-    static string FormatFanTypes(OmenFanTypeInfo fanTypeInfo) {
-      if (fanTypeInfo == null)
-        return null;
-
-      return $"{fanTypeInfo.Fan1Type}/{fanTypeInfo.Fan2Type}";
-    }
-
-    static string BuildTraySummaryText() {
-      List<string> parts = new List<string>();
-      parts.Add($"CPU {CPUTemp:F0}C {CPUPower:F0}W");
-
-      if (monitorGPU)
-        parts.Add($"GPU {GPUTemp:F0}C {GPUPower:F0}W");
-
-      float? batteryWatts = GetBatteryPowerWatts(currentBatteryTelemetry);
-      if (batteryWatts.HasValue && !powerOnline)
-        parts.Add($"BAT {batteryWatts.Value:F0}W");
-
-      if (currentGfxMode != OmenGfxMode.Unknown)
-        parts.Add(FormatGfxMode(currentGfxMode));
-
-      string text = string.Join(" | ", parts);
-      if (text.Length > 63)
-        text = text.Substring(0, 63);
-      return text;
+      shellService.RefreshStatus(shellStatusBuilder.Build(
+        CreateRuntimeStateSnapshot(),
+        AppDomain.CurrentDomain.BaseDirectory,
+        MainForm.IsVisibleOnScreen));
     }
 
     static void LoadFanConfig(string filePath) {
@@ -1344,29 +1238,6 @@ namespace OmenSuperHub {
           }
         }
       });
-    }
-
-    static string BuildMonitorText() {
-      List<string> lines = new List<string>();
-      lines.Add($"CPU: {CPUTemp:F1}°C  {CPUPower:F1}W");
-
-      if (monitorGPU)
-        lines.Add($"GPU: {GPUTemp:F1}°C  {GPUPower:F1}W");
-
-      float systemPower = CPUPower + (monitorGPU ? GPUPower : 0f);
-      string source = powerOnline ? "AC" : "BAT";
-      if (!powerOnline && currentBatteryTelemetry != null) {
-        float? batteryWatts = GetBatteryPowerWatts(currentBatteryTelemetry);
-        if (batteryWatts.HasValue) {
-          systemPower = batteryWatts.Value;
-        }
-      }
-      lines.Add($"SYS: {systemPower:F1}W ({source})");
-
-      if (monitorFan)
-        lines.Add($"FAN: {fanSpeedNow[0] * 100}/{fanSpeedNow[1] * 100} RPM");
-
-      return string.Join("\n", lines);
     }
 
     static void Exit() {

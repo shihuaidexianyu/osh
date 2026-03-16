@@ -202,13 +202,16 @@
     <Compile Include="src\App\AppApplicationContext.cs" />
     <Compile Include="src\App\AppBackgroundScheduler.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
+    <Compile Include="src\App\AppRuntimeState.cs" />
     <Compile Include="src\App\IAppController.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />
     <Compile Include="src\App\Services\HardwareControlService.cs" />
+    <Compile Include="src\App\Services\DashboardSnapshotBuilder.cs" />
     <Compile Include="src\App\Services\AppSettingsService.cs" />
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />
     <Compile Include="src\App\Services\AppShellService.cs" />
+    <Compile Include="src\App\Services\ShellStatusBuilder.cs" />
     <Compile Include="src\Hardware\IOmenHardwareGateway.cs" />
     <Compile Include="src\Hardware\OmenHardwareGateway.cs" />
     <Compile Include="src\UI\FloatingForm.cs">

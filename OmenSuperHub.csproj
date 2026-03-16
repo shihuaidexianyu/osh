@@ -204,6 +204,7 @@
     <Compile Include="src\App\AppControlSettings.cs" />
     <Compile Include="src\App\IAppController.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />
+    <Compile Include="src\App\Services\HardwareControlService.cs" />
     <Compile Include="src\App\Services\AppSettingsService.cs" />
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />

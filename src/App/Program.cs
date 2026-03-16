@@ -114,7 +114,7 @@ namespace OmenSuperHub {
 
     static void ApplyFanMode(FanModeOption mode, string persistConfigName = null) {
       fanMode = RuntimeControlSettings.ToStorageValue(mode);
-      SetFanMode(mode == FanModeOption.Performance ? (byte)0x31 : (byte)0x30);
+      hardwareControlService.SetFanMode(mode);
       RestoreCPUPower();
       PersistControlMutation(persistConfigName);
     }
@@ -122,13 +122,13 @@ namespace OmenSuperHub {
     static void ApplyFanControl(FanControlOption mode, int manualFanRpm, string persistConfigName = null) {
       fanControl = RuntimeControlSettings.ToStorageValue(mode, manualFanRpm);
       if (mode == FanControlOption.Auto) {
-        SetMaxFanSpeedOff();
+        hardwareControlService.SetMaxFanSpeedEnabled(false);
         backgroundScheduler?.SetFanControlLoopEnabled(true);
       } else if (mode == FanControlOption.Max) {
-        SetMaxFanSpeedOn();
+        hardwareControlService.SetMaxFanSpeedEnabled(true);
         backgroundScheduler?.SetFanControlLoopEnabled(false);
       } else {
-        SetMaxFanSpeedOff();
+        hardwareControlService.SetMaxFanSpeedEnabled(false);
         backgroundScheduler?.SetFanControlLoopEnabled(false);
         ApplyManualFanRpm(fanControl);
       }
@@ -164,49 +164,27 @@ namespace OmenSuperHub {
 
     static void ApplyCpuPower(bool isMax, int watts, string persistConfigName = null) {
       cpuPower = RuntimeControlSettings.ToCpuPowerStorageValue(isMax, watts);
-      SetCpuPowerLimit((byte)(isMax ? 254 : Math.Max(25, Math.Min(254, watts))));
+      hardwareControlService.SetCpuPowerLimit(isMax ? 254 : Math.Max(25, Math.Min(254, watts)));
       powerController.Reset();
       PersistControlMutation(persistConfigName);
     }
 
     static void ApplyGpuPower(GpuPowerOption value, string persistConfigName = null) {
       gpuPower = RuntimeControlSettings.ToStorageValue(value);
-      switch (value) {
-        case GpuPowerOption.Max:
-          SetMaxGpuPower();
-          break;
-        case GpuPowerOption.Min:
-          SetMinGpuPower();
-          break;
-        default:
-          SetMedGpuPower();
-          break;
-      }
-
+      hardwareControlService.ApplyGpuPower(value);
       powerController.Reset();
       PersistControlMutation(persistConfigName);
     }
 
     static void ApplyGraphicsMode(GraphicsModeOption value, string persistConfigName = null) {
       graphicsModeSetting = RuntimeControlSettings.ToStorageValue(value);
-      switch (value) {
-        case GraphicsModeOption.Discrete:
-          SetGraphicsMode(OmenGfxMode.Discrete);
-          break;
-        case GraphicsModeOption.Optimus:
-          SetGraphicsMode(OmenGfxMode.Optimus);
-          break;
-        default:
-          SetGraphicsMode(OmenGfxMode.Hybrid);
-          break;
-      }
-
+      hardwareControlService.ApplyGraphicsMode(value);
       PersistControlMutation(persistConfigName);
     }
 
     static void ApplyGpuClock(int value, string persistConfigName = null) {
       gpuClock = Math.Max(0, value);
-      SetGPUClockLimit(gpuClock);
+      hardwareControlService.SetGpuClockLimit(gpuClock);
       PersistControlMutation(persistConfigName);
     }
 
@@ -218,7 +196,7 @@ namespace OmenSuperHub {
         RestoreCPUPower();
         RestoreGpuPower();
         if (fanControl == "auto")
-          SetMaxFanSpeedOff();
+          hardwareControlService.SetMaxFanSpeedEnabled(false);
         smartPowerControlState = "manual";
         smartPowerControlReason = "disabled";
       }
@@ -315,6 +293,7 @@ namespace OmenSuperHub {
     static readonly object temperatureSensorsLock = new object();
     static readonly PowerController powerController = new PowerController();
     static readonly ProcessCommandService processCommandService = new ProcessCommandService();
+    static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
@@ -362,63 +341,7 @@ namespace OmenSuperHub {
 
       fanControl = $"{rpm} RPM";
       int rawLevel = FanRpmToRawLevel(rpm);
-      SetFanLevel(rawLevel, rawLevel);
-    }
-
-    static void GetFanCount() {
-      hardwareGateway.GetFanCount();
-    }
-
-    static List<int> GetFanLevel() {
-      return hardwareGateway.GetFanLevel();
-    }
-
-    static void SetFanLevel(int fanSpeed1, int fanSpeed2) {
-      hardwareGateway.SetFanLevel(fanSpeed1, fanSpeed2);
-    }
-
-    static void SetFanMode(byte mode) {
-      hardwareGateway.SetFanMode(mode);
-    }
-
-    static void SetMaxGpuPower() {
-      hardwareGateway.SetMaxGpuPower();
-    }
-
-    static void SetMedGpuPower() {
-      hardwareGateway.SetMedGpuPower();
-    }
-
-    static void SetMinGpuPower() {
-      hardwareGateway.SetMinGpuPower();
-    }
-
-    static void SetCpuPowerLimit(byte value) {
-      hardwareGateway.SetCpuPowerLimit(value);
-    }
-
-    static void SetMaxFanSpeedOn() {
-      hardwareGateway.SetMaxFanSpeedOn();
-    }
-
-    static void SetMaxFanSpeedOff() {
-      hardwareGateway.SetMaxFanSpeedOff();
-    }
-
-    static void SetGraphicsMode(OmenGfxMode mode) {
-      hardwareGateway.SetGraphicsMode(mode);
-    }
-
-    static void SendResumeProbe() {
-      hardwareGateway.SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
-    }
-
-    static void OmenKeyOff() {
-      hardwareGateway.OmenKeyOff();
-    }
-
-    static void OmenKeyOn(string method) {
-      hardwareGateway.OmenKeyOn(method);
+      hardwareControlService.SetFanLevel(rawLevel, rawLevel);
     }
 
     void StartTimers() {
@@ -442,7 +365,7 @@ namespace OmenSuperHub {
       try {
         QueryHarware();
         if (monitorFan)
-          fanSpeedNow = GetFanLevel();
+          fanSpeedNow = hardwareControlService.GetFanLevel();
         ApplySmartPowerControl();
       } catch (Exception ex) {
         WriteErrorLog(ex, "hardware polling");
@@ -458,10 +381,10 @@ namespace OmenSuperHub {
       int fanSpeed2 = FanRpmToRawLevel(fanCurveService.GetFanSpeedForTemperature(CPUTemp, GPUTemp, monitorGPU, 1));
       if (monitorFan) {
         if (fanSpeed1 != fanSpeedNow[0] || fanSpeed2 != fanSpeedNow[1]) {
-          SetFanLevel(fanSpeed1, fanSpeed2);
+          hardwareControlService.SetFanLevel(fanSpeed1, fanSpeed2);
         }
       } else {
-        SetFanLevel(fanSpeed1, fanSpeed2);
+        hardwareControlService.SetFanLevel(fanSpeed1, fanSpeed2);
       }
     }
 
@@ -587,19 +510,19 @@ namespace OmenSuperHub {
       if (flagStart < 5) {
         flagStart++;
         if (fanControl.Contains("max")) {
-          SetMaxFanSpeedOn();
+          hardwareControlService.SetMaxFanSpeedEnabled(true);
         } else if (fanControl.Contains(" RPM")) {
-          SetMaxFanSpeedOff();
+          hardwareControlService.SetMaxFanSpeedEnabled(false);
           ApplyManualFanRpm(fanControl);
         }
       }
 
-      GetFanCount();
+      hardwareControlService.RefreshFanControllerPresence();
     }
 
     static void OnPowerChange(object s, PowerModeChangedEventArgs e) {
       if (e.Mode == PowerModes.Resume) {
-        SendResumeProbe();
+        hardwareControlService.SendResumeProbe();
 
         countRestore = 3;
       }
@@ -724,11 +647,11 @@ namespace OmenSuperHub {
     static void RestoreCPUPower() {
       // 恢复CPU功耗设定
       if (cpuPower == "max") {
-        SetCpuPowerLimit(254);
+        hardwareControlService.SetCpuPowerLimit(254);
       } else if (cpuPower.Contains(" W")) {
         int value = int.Parse(cpuPower.Replace(" W", "").Trim());
         if (value > 10 && value <= 254) {
-          SetCpuPowerLimit((byte)value);
+          hardwareControlService.SetCpuPowerLimit(value);
         }
       }
     }
@@ -736,13 +659,13 @@ namespace OmenSuperHub {
     static void RestoreGpuPower() {
       switch (gpuPower) {
         case "max":
-          SetMaxGpuPower();
+          hardwareControlService.ApplyGpuPower(GpuPowerOption.Max);
           break;
         case "med":
-          SetMedGpuPower();
+          hardwareControlService.ApplyGpuPower(GpuPowerOption.Med);
           break;
         default:
-          SetMinGpuPower();
+          hardwareControlService.ApplyGpuPower(GpuPowerOption.Min);
           break;
       }
     }
@@ -877,28 +800,28 @@ namespace OmenSuperHub {
 
           if (decision.ApplyCpuLimit) {
             int cpuLimit = Math.Max(1, Math.Min(254, decision.CpuLimitWatts));
-            SetCpuPowerLimit((byte)cpuLimit);
+            hardwareControlService.SetCpuPowerLimit(cpuLimit);
           }
 
           if (decision.ApplyGpuTier) {
             switch (decision.GpuTier) {
               case GpuPowerTier.Max:
-                SetMaxGpuPower();
+                hardwareControlService.ApplyGpuPower(GpuPowerOption.Max);
                 break;
               case GpuPowerTier.Med:
-                SetMedGpuPower();
+                hardwareControlService.ApplyGpuPower(GpuPowerOption.Med);
                 break;
               default:
-                SetMinGpuPower();
+                hardwareControlService.ApplyGpuPower(GpuPowerOption.Min);
                 break;
             }
           }
 
           if (fanControl == "auto" && decision.ApplyFanBoost) {
             if (decision.FanBoostActive) {
-              SetMaxFanSpeedOn();
+              hardwareControlService.SetMaxFanSpeedEnabled(true);
             } else {
-              SetMaxFanSpeedOff();
+              hardwareControlService.SetMaxFanSpeedEnabled(false);
             }
           }
         } catch (Exception ex) {
@@ -916,13 +839,7 @@ namespace OmenSuperHub {
     }
 
     static bool SetGPUClockLimit(int freq) {
-      if (freq < 210) {
-        ExecuteCommand("nvidia-smi --reset-gpu-clocks");
-        return false;
-      } else {
-        ExecuteCommand("nvidia-smi --lock-gpu-clocks=0," + freq);
-        return true;
-      }
+      return hardwareControlService.SetGpuClockLimit(freq);
     }
 
     static ProcessResult ExecuteCommand(string command) {
@@ -1299,19 +1216,19 @@ namespace OmenSuperHub {
       switch (omenKey) {
         case "default":
           backgroundScheduler?.SetFloatingToggleEnabled(false);
-          OmenKeyOff();
-          OmenKeyOn(omenKey);
+          hardwareControlService.DisableOmenKey();
+          hardwareControlService.EnableOmenKey(omenKey);
           UpdateCheckedState("omenKeyGroup", "默认");
           break;
         case "custom":
           backgroundScheduler?.SetFloatingToggleEnabled(true);
-          OmenKeyOff();
-          OmenKeyOn(omenKey);
+          hardwareControlService.DisableOmenKey();
+          hardwareControlService.EnableOmenKey(omenKey);
           UpdateCheckedState("omenKeyGroup", "切换浮窗显示");
           break;
         case "none":
           backgroundScheduler?.SetFloatingToggleEnabled(false);
-          OmenKeyOff();
+          hardwareControlService.DisableOmenKey();
           UpdateCheckedState("omenKeyGroup", "取消绑定");
           break;
       }
@@ -1469,7 +1386,7 @@ namespace OmenSuperHub {
 
       isShuttingDown = true;
       if (omenKey == "custom") {
-        OmenKeyOff();
+        hardwareControlService.DisableOmenKey();
       }
 
       SystemEvents.PowerModeChanged -= new PowerModeChangedEventHandler(OnPowerChange);

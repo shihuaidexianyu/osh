@@ -71,6 +71,10 @@ namespace OmenSuperHub {
 
     void LoadDefaultFanConfig(string filePath, float silentCoef) {
       byte[] fanTableBytes = GetFanTable();
+      if (fanTableBytes == null || fanTableBytes.Length < 3) {
+        GenerateDefaultMapping(filePath);
+        return;
+      }
 
       int numberOfFans = fanTableBytes[0];
       if (numberOfFans != 2) {
@@ -107,23 +111,26 @@ namespace OmenSuperHub {
           int fan1Speed = fanTableBytes[baseIndex];
           int fan2Speed = fanTableBytes[baseIndex + 1];
           int originalTempThreshold = fanTableBytes[baseIndex + 2];
-          float cpuTempThreshold = targetMin +
-              (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
+          float cpuTempThreshold;
+          if (originalMax == originalMin) {
+            cpuTempThreshold = targetMin;
+          } else {
+            cpuTempThreshold = targetMin +
+                (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
+          }
           float gpuTempThreshold = cpuTempThreshold - 10.0f;
 
-          if (originalTempThreshold == originalMin || originalTempThreshold == originalMax) {
-            if (!cpuTempFanMap.ContainsKey(cpuTempThreshold)) {
-              cpuTempFanMap[cpuTempThreshold] = new List<int>();
-            }
-            cpuTempFanMap[cpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
-            cpuTempFanMap[cpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
-
-            if (!gpuTempFanMap.ContainsKey(gpuTempThreshold)) {
-              gpuTempFanMap[gpuTempThreshold] = new List<int>();
-            }
-            gpuTempFanMap[gpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
-            gpuTempFanMap[gpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
+          if (!cpuTempFanMap.ContainsKey(cpuTempThreshold)) {
+            cpuTempFanMap[cpuTempThreshold] = new List<int>();
           }
+          cpuTempFanMap[cpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
+          cpuTempFanMap[cpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
+
+          if (!gpuTempFanMap.ContainsKey(gpuTempThreshold)) {
+            gpuTempFanMap[gpuTempThreshold] = new List<int>();
+          }
+          gpuTempFanMap[gpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
+          gpuTempFanMap[gpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
         }
       }
 

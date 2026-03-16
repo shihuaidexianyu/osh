@@ -11,15 +11,22 @@ using static OmenSuperHub.OmenHardware;
 namespace OmenSuperHub {
   public sealed class MainForm {
     static MainForm instance;
+    static IAppController controller;
     public static bool IsVisibleOnScreen {
       get {
         return instance != null && instance.window != null && instance.window.IsVisible;
       }
     }
+    internal static void Initialize(IAppController appController) {
+      controller = appController;
+    }
     public static MainForm Instance {
       get {
         if (instance == null) {
-          instance = new MainForm();
+          if (controller == null) {
+            throw new InvalidOperationException("MainForm controller is not initialized.");
+          }
+          instance = new MainForm(controller);
         }
         return instance;
       }
@@ -57,6 +64,7 @@ namespace OmenSuperHub {
     DispatcherTimer refreshTimer;
     bool syncingControlState;
     bool hasPendingChanges;
+    readonly IAppController appController;
 
     TextBlock totalPowerText;
     TextBlock lastUpdateText;
@@ -130,7 +138,8 @@ namespace OmenSuperHub {
     readonly List<float> cpuLimitHistory = new List<float>();
     const int TemperatureTrendCapacity = 240;
 
-    MainForm() {
+    MainForm(IAppController appController) {
+      this.appController = appController;
       EnsureWindow();
     }
 
@@ -1159,12 +1168,12 @@ namespace OmenSuperHub {
         return;
       }
 
-      var snapshot = Program.GetDashboardSnapshot();
+      var snapshot = appController.GetDashboardSnapshot();
 
       float totalPower = snapshot.CpuPowerWatts + snapshot.GpuPowerWatts;
       if (!snapshot.AcOnline) {
         float? batteryDischarge = GetBatteryDischargePowerWatts(snapshot.Battery);
-      if (batteryDischarge.HasValue)
+        if (batteryDischarge.HasValue)
           totalPower = batteryDischarge.Value;
       }
       totalPowerText.Text = $"{totalPower:F1} W";
@@ -1373,42 +1382,42 @@ namespace OmenSuperHub {
         : ConvertUsageModeBack(usageModeComboBox.SelectedItem.ToString());
 
       if (selectedUsageMode != "custom") {
-        Program.ApplyUsageModeSetting(selectedUsageMode);
+        appController.ApplyUsageModeSetting(selectedUsageMode);
       } else {
-        Program.ApplyFanModeSetting(fanModeComboBox?.SelectedItem?.ToString() == "性能" ? "performance" : "default");
+        appController.ApplyFanModeSetting(fanModeComboBox?.SelectedItem?.ToString() == "性能" ? "performance" : "default");
 
         string fanControlSelection = fanControlComboBox?.SelectedItem?.ToString() ?? "自动";
         if (fanControlSelection == "自动") {
-          Program.ApplyFanControlSetting("auto");
+          appController.ApplyFanControlSetting("auto");
         } else if (fanControlSelection == "最大风扇") {
-          Program.ApplyFanControlSetting("max");
+          appController.ApplyFanControlSetting("max");
         } else {
           int rpm = manualFanRpmSlider == null ? ManualFanMinRpm : (int)Math.Round(manualFanRpmSlider.Value);
-          Program.ApplyFanControlSetting($"{rpm} RPM");
+          appController.ApplyFanControlSetting($"{rpm} RPM");
         }
 
-        Program.ApplyFanTableSetting(fanTableComboBox?.SelectedItem?.ToString() == "降温模式" ? "cool" : "silent");
-        Program.ApplyTempSensitivitySetting(ConvertTempSensitivityBack(tempSensitivityComboBox?.SelectedItem?.ToString() ?? "高"));
+        appController.ApplyFanTableSetting(fanTableComboBox?.SelectedItem?.ToString() == "降温模式" ? "cool" : "silent");
+        appController.ApplyTempSensitivitySetting(ConvertTempSensitivityBack(tempSensitivityComboBox?.SelectedItem?.ToString() ?? "高"));
 
         string cpuPowerSelection = cpuPowerComboBox?.SelectedItem?.ToString() ?? "最大";
-        Program.ApplyCpuPowerSetting(cpuPowerSelection == "最大" ? "max" : cpuPowerSelection);
-        Program.ApplyGpuPowerSetting(ConvertGpuPowerValueBack(gpuPowerComboBox?.SelectedItem?.ToString() ?? "节能"));
-        Program.ApplyGraphicsModeSetting(ConvertGraphicsModeSettingBack(graphicsModeComboBox?.SelectedItem?.ToString() ?? "混合输出"));
+        appController.ApplyCpuPowerSetting(cpuPowerSelection == "最大" ? "max" : cpuPowerSelection);
+        appController.ApplyGpuPowerSetting(ConvertGpuPowerValueBack(gpuPowerComboBox?.SelectedItem?.ToString() ?? "节能"));
+        appController.ApplyGraphicsModeSetting(ConvertGraphicsModeSettingBack(graphicsModeComboBox?.SelectedItem?.ToString() ?? "混合输出"));
 
         string gpuClockSelection = gpuClockComboBox?.SelectedItem?.ToString() ?? "还原";
-        Program.ApplyGpuClockSetting(gpuClockSelection == "还原" ? 0 : int.Parse(gpuClockSelection.Replace(" MHz", string.Empty)));
-        Program.ApplySmartPowerControlSetting(smartPowerControlCheckBox != null && smartPowerControlCheckBox.IsChecked == true);
+        appController.ApplyGpuClockSetting(gpuClockSelection == "还原" ? 0 : int.Parse(gpuClockSelection.Replace(" MHz", string.Empty)));
+        appController.ApplySmartPowerControlSetting(smartPowerControlCheckBox != null && smartPowerControlCheckBox.IsChecked == true);
       }
 
       bool floatingEnabled = floatingBarButton != null && floatingBarButton.Tag is bool tagValue && tagValue;
-      Program.ApplyFloatingBarSetting(floatingEnabled);
+      appController.ApplyFloatingBarSetting(floatingEnabled);
       if (floatingBarLocationComboBox?.SelectedItem != null) {
-        Program.ApplyFloatingBarLocationSetting(floatingBarLocationComboBox.SelectedItem.ToString() == "右上角" ? "right" : "left");
+        appController.ApplyFloatingBarLocationSetting(floatingBarLocationComboBox.SelectedItem.ToString() == "右上角" ? "right" : "left");
       }
 
       var tuning = BuildPowerTuningFromSliders();
       if (tuning != null) {
-        Program.ApplyPowerControlTuning(tuning);
+        appController.ApplyPowerControlTuning(tuning);
       }
 
       ClearPendingChanges();
@@ -1416,7 +1425,7 @@ namespace OmenSuperHub {
     }
 
     void DiscardChangesButton_Click(object sender, RoutedEventArgs e) {
-      var snapshot = Program.GetDashboardSnapshot();
+      var snapshot = appController.GetDashboardSnapshot();
       SyncControlState(snapshot);
       ClearPendingChanges();
       RefreshDashboard();
@@ -1548,7 +1557,7 @@ namespace OmenSuperHub {
     }
 
     void SyncPowerTuningControls() {
-      var tuning = Program.GetPowerControlTuningSnapshot();
+      var tuning = appController.GetPowerControlTuningSnapshot();
       if (tuning == null) {
         return;
       }
@@ -1600,7 +1609,7 @@ namespace OmenSuperHub {
     }
 
     void ResetTuningButton_Click(object sender, RoutedEventArgs e) {
-      var tuning = Program.GetDefaultPowerControlTuning();
+      var tuning = appController.GetDefaultPowerControlTuning();
       syncingControlState = true;
       try {
         if (tuning != null) {

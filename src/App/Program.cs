@@ -20,7 +20,7 @@ using static OmenSuperHub.OmenHardware;
 using System.IO.Pipes;
 
 namespace OmenSuperHub {
-  static class Program {
+  internal sealed class AppRuntime : IAppController {
     static bool suppressUsageModeAutoMark;
 
     static string NormalizeGraphicsModeSetting(string value) {
@@ -379,8 +379,7 @@ namespace OmenSuperHub {
       SetFanLevel(rawLevel, rawLevel);
     }
 
-    [STAThread]
-    static void Main(string[] args) {
+    public void Run(string[] args) {
       bool isNewInstance;
       using (Mutex mutex = new Mutex(true, "MyUniqueAppMutex", out isNewInstance)) {
         if (!isNewInstance) {
@@ -397,6 +396,7 @@ namespace OmenSuperHub {
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        MainForm.Initialize(this);
 
         powerOnline = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
         Version version = Assembly.GetExecutingAssembly().GetName().Version;
@@ -422,7 +422,8 @@ namespace OmenSuperHub {
             if (monitorFan)
               fanSpeedNow = GetFanLevel();
             ApplySmartPowerControl();
-          } catch {
+          } catch (Exception ex) {
+            WriteErrorLog(ex, "hardware polling");
           }
         }, null, 100, 1000);
 
@@ -826,7 +827,8 @@ namespace OmenSuperHub {
               SetMaxFanSpeedOff();
             }
           }
-        } catch {
+        } catch (Exception ex) {
+          WriteErrorLog(ex, "smart power control");
         }
       }
     }
@@ -1497,16 +1499,96 @@ namespace OmenSuperHub {
       LogError(ex);
     }
 
-    static void LogError(Exception ex) {
+    static void WriteErrorLog(Exception ex, string context = null) {
+      if (ex == null) {
+        return;
+      }
+
       try {
         string absoluteFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "error.log");
-        File.AppendAllText(absoluteFilePath, DateTime.Now + ": " + ex.ToString() + Environment.NewLine);
+        string prefix = string.IsNullOrWhiteSpace(context) ? string.Empty : $"[{context}] ";
+        File.AppendAllText(absoluteFilePath, DateTime.Now + ": " + prefix + ex + Environment.NewLine);
       } catch {
       }
+    }
+
+    static void LogError(Exception ex) {
+      WriteErrorLog(ex);
 
       if (!isShuttingDown) {
         MessageBox.Show("An unexpected error occurred. Please check the log file for details.");
       }
+    }
+
+    DashboardSnapshot IAppController.GetDashboardSnapshot() {
+      return GetDashboardSnapshot();
+    }
+
+    void IAppController.ApplyUsageModeSetting(string mode) {
+      ApplyUsageModeSetting(mode);
+    }
+
+    void IAppController.ApplyFanModeSetting(string mode) {
+      ApplyFanModeSetting(mode);
+    }
+
+    void IAppController.ApplyFanControlSetting(string controlValue) {
+      ApplyFanControlSetting(controlValue);
+    }
+
+    void IAppController.ApplyFanTableSetting(string value) {
+      ApplyFanTableSetting(value);
+    }
+
+    void IAppController.ApplyTempSensitivitySetting(string value) {
+      ApplyTempSensitivitySetting(value);
+    }
+
+    void IAppController.ApplyCpuPowerSetting(string value) {
+      ApplyCpuPowerSetting(value);
+    }
+
+    void IAppController.ApplyGpuPowerSetting(string value) {
+      ApplyGpuPowerSetting(value);
+    }
+
+    void IAppController.ApplyGraphicsModeSetting(string value) {
+      ApplyGraphicsModeSetting(value);
+    }
+
+    void IAppController.ApplyGpuClockSetting(int value) {
+      ApplyGpuClockSetting(value);
+    }
+
+    void IAppController.ApplyFloatingBarSetting(bool enabled) {
+      ApplyFloatingBarSetting(enabled);
+    }
+
+    void IAppController.ApplyFloatingBarLocationSetting(string location) {
+      ApplyFloatingBarLocationSetting(location);
+    }
+
+    void IAppController.ApplySmartPowerControlSetting(bool enabled) {
+      ApplySmartPowerControlSetting(enabled);
+    }
+
+    PowerControlTuning IAppController.GetPowerControlTuningSnapshot() {
+      return GetPowerControlTuningSnapshot();
+    }
+
+    PowerControlTuning IAppController.GetDefaultPowerControlTuning() {
+      return GetDefaultPowerControlTuning();
+    }
+
+    void IAppController.ApplyPowerControlTuning(PowerControlTuning tuning) {
+      ApplyPowerControlTuning(tuning);
+    }
+  }
+
+  static class Program {
+    [STAThread]
+    static void Main(string[] args) {
+      new AppRuntime().Run(args);
     }
   }
 }

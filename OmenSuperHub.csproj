@@ -208,6 +208,8 @@
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />
     <Compile Include="src\App\Services\AppShellService.cs" />
+    <Compile Include="src\Hardware\IOmenHardwareGateway.cs" />
+    <Compile Include="src\Hardware\OmenHardwareGateway.cs" />
     <Compile Include="src\UI\FloatingForm.cs">
       <SubType>Form</SubType>
     </Compile>

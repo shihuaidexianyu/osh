@@ -23,6 +23,7 @@ namespace OmenSuperHub {
   internal sealed class AppRuntime : IAppController {
     static AppRuntime currentInstance;
     static bool suppressUsageModeAutoMark;
+    static readonly IOmenHardwareGateway hardwareGateway = new OmenHardwareGateway();
     Mutex singleInstanceMutex;
 
     static string NormalizeGraphicsModeSetting(string value) {
@@ -315,9 +316,9 @@ namespace OmenSuperHub {
     static readonly PowerController powerController = new PowerController();
     static readonly ProcessCommandService processCommandService = new ProcessCommandService();
     static readonly AppSettingsService settingsService = new AppSettingsService();
-    static readonly FanCurveService fanCurveService = new FanCurveService();
+    static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
-    static readonly HardwareTelemetryService hardwareTelemetryService = new HardwareTelemetryService(libreComputer);
+    static readonly HardwareTelemetryService hardwareTelemetryService = new HardwareTelemetryService(libreComputer, hardwareGateway);
     static readonly AppShellService shellService = new AppShellService();
     static bool monitorGPU = true, monitorFan = true, powerOnline = true;
     static List<int> fanSpeedNow = new List<int> { 20, 23 };
@@ -362,6 +363,62 @@ namespace OmenSuperHub {
       fanControl = $"{rpm} RPM";
       int rawLevel = FanRpmToRawLevel(rpm);
       SetFanLevel(rawLevel, rawLevel);
+    }
+
+    static void GetFanCount() {
+      hardwareGateway.GetFanCount();
+    }
+
+    static List<int> GetFanLevel() {
+      return hardwareGateway.GetFanLevel();
+    }
+
+    static void SetFanLevel(int fanSpeed1, int fanSpeed2) {
+      hardwareGateway.SetFanLevel(fanSpeed1, fanSpeed2);
+    }
+
+    static void SetFanMode(byte mode) {
+      hardwareGateway.SetFanMode(mode);
+    }
+
+    static void SetMaxGpuPower() {
+      hardwareGateway.SetMaxGpuPower();
+    }
+
+    static void SetMedGpuPower() {
+      hardwareGateway.SetMedGpuPower();
+    }
+
+    static void SetMinGpuPower() {
+      hardwareGateway.SetMinGpuPower();
+    }
+
+    static void SetCpuPowerLimit(byte value) {
+      hardwareGateway.SetCpuPowerLimit(value);
+    }
+
+    static void SetMaxFanSpeedOn() {
+      hardwareGateway.SetMaxFanSpeedOn();
+    }
+
+    static void SetMaxFanSpeedOff() {
+      hardwareGateway.SetMaxFanSpeedOff();
+    }
+
+    static void SetGraphicsMode(OmenGfxMode mode) {
+      hardwareGateway.SetGraphicsMode(mode);
+    }
+
+    static void SendResumeProbe() {
+      hardwareGateway.SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+    }
+
+    static void OmenKeyOff() {
+      hardwareGateway.OmenKeyOff();
+    }
+
+    static void OmenKeyOn(string method) {
+      hardwareGateway.OmenKeyOn(method);
     }
 
     void StartTimers() {
@@ -542,7 +599,7 @@ namespace OmenSuperHub {
 
     static void OnPowerChange(object s, PowerModeChangedEventArgs e) {
       if (e.Mode == PowerModes.Resume) {
-        SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
+        SendResumeProbe();
 
         countRestore = 3;
       }

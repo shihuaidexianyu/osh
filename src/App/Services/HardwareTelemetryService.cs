@@ -40,6 +40,7 @@ namespace OmenSuperHub {
     // This service is intentionally narrowed to the supported target hardware:
     // Intel CPU + NVIDIA dGPU.
     readonly LibreComputer libreComputer;
+    readonly IOmenHardwareGateway hardwareGateway;
     readonly object stateLock = new object();
     int advancedStatusTick;
     int temperatureSensorRefreshTick;
@@ -72,8 +73,9 @@ namespace OmenSuperHub {
       "gpu board power"
     };
 
-    public HardwareTelemetryService(LibreComputer libreComputer) {
+    public HardwareTelemetryService(LibreComputer libreComputer, IOmenHardwareGateway hardwareGateway) {
       this.libreComputer = libreComputer;
+      this.hardwareGateway = hardwareGateway;
     }
 
     public HardwareTelemetrySnapshot Poll(HardwareTelemetryRequest request) {
@@ -484,38 +486,38 @@ namespace OmenSuperHub {
       }
 
       try {
-        nextGfxMode = GetGraphicsMode();
+        nextGfxMode = hardwareGateway.GetGraphicsMode();
       } catch {
       }
 
       try {
-        var gpuStatus = GetGpuStatus();
+        var gpuStatus = hardwareGateway.GetGpuStatus();
         if (gpuStatus != null)
           nextGpuStatus = gpuStatus;
       } catch {
       }
 
       try {
-        var designData = GetSystemDesignData();
+        var designData = hardwareGateway.GetSystemDesignData();
         if (designData != null)
           nextSystemDesignData = designData;
       } catch {
       }
 
       try {
-        nextSmartAdapterStatus = GetSmartAdapterStatus();
+        nextSmartAdapterStatus = hardwareGateway.GetSmartAdapterStatus();
       } catch {
       }
 
       try {
-        var fanTypeInfo = GetFanTypeInfo();
+        var fanTypeInfo = hardwareGateway.GetFanTypeInfo();
         if (fanTypeInfo != null)
           nextFanTypeInfo = fanTypeInfo;
       } catch {
       }
 
       try {
-        nextKeyboardType = GetKeyboardType();
+        nextKeyboardType = hardwareGateway.GetKeyboardType();
       } catch {
       }
 

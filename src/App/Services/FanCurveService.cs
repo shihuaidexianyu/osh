@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using static OmenSuperHub.OmenHardware;
 
 namespace OmenSuperHub {
   internal sealed class FanCurveService {
+    readonly IOmenHardwareGateway hardwareGateway;
     readonly object fanMapLock = new object();
     readonly Dictionary<float, List<int>> cpuTempFanMap = new Dictionary<float, List<int>>();
     readonly Dictionary<float, List<int>> gpuTempFanMap = new Dictionary<float, List<int>>();
+
+    public FanCurveService(IOmenHardwareGateway hardwareGateway) {
+      this.hardwareGateway = hardwareGateway;
+    }
 
     public void LoadConfig(string filePath) {
       float silentCoef = filePath == "silent.txt" ? 0.8f : 1f;
@@ -70,7 +74,7 @@ namespace OmenSuperHub {
     }
 
     void LoadDefaultFanConfig(string filePath, float silentCoef) {
-      byte[] fanTableBytes = GetFanTable();
+      byte[] fanTableBytes = hardwareGateway.GetFanTable();
       if (fanTableBytes == null || fanTableBytes.Length < 3) {
         GenerateDefaultMapping(filePath);
         return;

@@ -4,6 +4,8 @@
 
 这个项目现在是一个“收敛目标明确”的工具，而不是通用型 OMEN 兼容层。
 
+本仓库基于 [breadeding/OmenSuperHub](https://github.com/breadeding/OmenSuperHub) fork，并在其基础上持续调整结构、界面和目标硬件范围。
+
 ## 项目定位
 
 - 目标机型范围：`Intel Core i9-13900HX + NVIDIA GeForce RTX 4060 Laptop GPU`
@@ -198,6 +200,7 @@ dotnet test tests/OmenSuperHub.Tests/OmenSuperHub.Tests.csproj -c Debug -p:Platf
 
 ## 来源与致谢
 
+- Fork 来源：[breadeding/OmenSuperHub](https://github.com/breadeding/OmenSuperHub)
 - [OmenMon](https://github.com/OmenMon/OmenMon)
 - [OmenHwCtl](https://github.com/GeographicCone/OmenHwCtl)
 - [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)

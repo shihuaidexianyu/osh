@@ -26,10 +26,6 @@ namespace OmenSuperHub {
     static readonly IOmenHardwareGateway hardwareGateway = new OmenHardwareGateway();
     Mutex singleInstanceMutex;
 
-    static string NormalizeGraphicsModeSetting(string value) {
-      return RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseGraphicsMode(value));
-    }
-
     internal static void ApplyFanModeSetting(string mode) {
       ApplyFanMode(RuntimeControlSettings.ParseFanMode(mode), persistConfigName: "FanMode");
     }
@@ -1284,26 +1280,20 @@ namespace OmenSuperHub {
     }
 
     static AppSettingsSnapshot CreateSettingsSnapshot() {
-      return new AppSettingsSnapshot {
+      var snapshot = new AppSettingsSnapshot {
         UsageMode = usageMode,
-        FanTable = fanTable,
-        FanMode = fanMode,
-        FanControl = fanControl,
-        TempSensitivity = tempSensitivity,
-        CpuPower = cpuPower,
-        GpuPower = gpuPower,
-        GraphicsModeSetting = graphicsModeSetting,
-        GpuClock = gpuClock,
         AutoStart = autoStart,
         AlreadyRead = alreadyRead,
         CustomIcon = customIcon,
         OmenKey = omenKey,
         MonitorFan = monitorFan,
-        SmartPowerControlEnabled = smartPowerControlEnabled,
         FloatingBarSize = textSize,
         FloatingBarLocation = floatingBarLoc,
         FloatingBar = floatingBar
       };
+
+      CreateCurrentControlSettings().ApplyToSnapshot(snapshot);
+      return snapshot;
     }
 
     static void HandleFloatingBarToggle() {

@@ -75,6 +75,22 @@ namespace OmenSuperHub {
              SmartPowerControlEnabled == other.SmartPowerControlEnabled;
     }
 
+    public void ApplyToSnapshot(AppSettingsSnapshot snapshot) {
+      if (snapshot == null) {
+        return;
+      }
+
+      snapshot.FanMode = ToStorageValue(FanMode);
+      snapshot.FanControl = ToStorageValue(FanControl, ManualFanRpm);
+      snapshot.FanTable = ToStorageValue(FanTable);
+      snapshot.TempSensitivity = ToStorageValue(TempSensitivity);
+      snapshot.CpuPower = ToCpuPowerStorageValue(CpuPowerMax, CpuPowerWatts);
+      snapshot.GpuPower = ToStorageValue(GpuPower);
+      snapshot.GraphicsModeSetting = ToStorageValue(GraphicsMode);
+      snapshot.GpuClock = Math.Max(0, GpuClockLimitMhz);
+      snapshot.SmartPowerControlEnabled = SmartPowerControlEnabled;
+    }
+
     public static RuntimeControlSettings CreatePreset(UsageModePreset preset) {
       switch (preset) {
         case UsageModePreset.Quiet:

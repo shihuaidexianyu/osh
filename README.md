@@ -36,6 +36,8 @@ dotnet build OmenSuperHub.sln -c Release -p:Platform=x64
 bin\x64\Release\OmenSuperHub.exe
 ```
 
+仓库也提供了 GitHub Actions 自动构建，工作流见 `.github/workflows/build-exe.yml`。每次 `push`、`pull_request` 或手动触发后，都可以在对应的 Actions 运行里下载 `OmenSuperHub-windows-x64-release` 构建产物。
+
 如果正在运行 `OmenSuperHub.exe`，重建前需要先关闭它，否则输出文件可能被占用。
 
 ## 运行说明

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.Serialization;
 
 namespace OmenSuperHub {
   internal enum GpuPowerTier {
@@ -42,20 +43,35 @@ namespace OmenSuperHub {
     public bool ApplyFanBoost { get; set; }
   }
 
+  [DataContract]
   internal sealed class PowerControlTuning {
+    [DataMember]
     public float CpuEmergencyTempC { get; set; }
+    [DataMember]
     public float GpuEmergencyTempC { get; set; }
+    [DataMember]
     public float CpuRecoverTempC { get; set; }
+    [DataMember]
     public float GpuRecoverTempC { get; set; }
+    [DataMember]
     public float CpuFanBoostOnTempC { get; set; }
+    [DataMember]
     public float GpuFanBoostOnTempC { get; set; }
+    [DataMember]
     public float CpuFanBoostOffTempC { get; set; }
+    [DataMember]
     public float GpuFanBoostOffTempC { get; set; }
+    [DataMember]
     public float CpuTempWallC { get; set; }
+    [DataMember]
     public float GpuTempWallC { get; set; }
+    [DataMember]
     public float CpuWallDeadbandC { get; set; }
+    [DataMember]
     public float GpuWallDeadbandC { get; set; }
+    [DataMember]
     public float BatteryGuardTriggerWatts { get; set; }
+    [DataMember]
     public float BatteryGuardReleaseWatts { get; set; }
 
     public static PowerControlTuning CreateDefault() {

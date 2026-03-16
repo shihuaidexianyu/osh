@@ -1,30 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Windows.Forms;
-using System.Xml.Serialization;
 
 namespace OmenSuperHub {
-  [Serializable]
+  [DataContract]
   public sealed class FanCurveConfigEntry {
+    [DataMember]
     public float CpuTemperature { get; set; }
+    [DataMember]
     public int CpuFan1Rpm { get; set; }
+    [DataMember]
     public int CpuFan2Rpm { get; set; }
+    [DataMember]
     public float GpuTemperature { get; set; }
+    [DataMember]
     public int GpuFan1Rpm { get; set; }
+    [DataMember]
     public int GpuFan2Rpm { get; set; }
   }
 
-  [Serializable]
+  [DataContract]
   public sealed class FanCurveConfigProfile {
+    [DataMember]
     public string Name { get; set; }
+    [DataMember]
     public List<FanCurveConfigEntry> Entries { get; set; } = new List<FanCurveConfigEntry>();
-  }
-
-  [Serializable]
-  public sealed class FanCurveConfigDocument {
-    public List<FanCurveConfigProfile> Profiles { get; set; } = new List<FanCurveConfigProfile>();
   }
 
   internal sealed class FanCurveService {
@@ -32,37 +34,30 @@ namespace OmenSuperHub {
     const string CoolProfileName = "cool";
 
     readonly IOmenHardwareGateway hardwareGateway;
+    readonly AppSettingsService settingsService;
     readonly object fanMapLock = new object();
     readonly Dictionary<float, List<int>> cpuTempFanMap = new Dictionary<float, List<int>>();
     readonly Dictionary<float, List<int>> gpuTempFanMap = new Dictionary<float, List<int>>();
-    readonly string configFilePath;
     List<FanCurveConfigEntry> activeEntries = new List<FanCurveConfigEntry>();
 
-    public FanCurveService(IOmenHardwareGateway hardwareGateway, string configFilePath = null) {
+    public FanCurveService(IOmenHardwareGateway hardwareGateway, AppSettingsService settingsService) {
       this.hardwareGateway = hardwareGateway;
-      this.configFilePath = string.IsNullOrWhiteSpace(configFilePath)
-        ? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OmenSuperHub",
-            "fan-curves.xml")
-        : configFilePath;
+      this.settingsService = settingsService;
     }
 
     public void LoadConfig(string profileName) {
       string normalizedProfileName = NormalizeProfileName(profileName);
+      List<FanCurveConfigProfile> profiles = settingsService.LoadFanCurveProfiles();
+      FanCurveConfigProfile profile = profiles.FirstOrDefault(item =>
+        string.Equals(item?.Name, normalizedProfileName, StringComparison.OrdinalIgnoreCase));
+
+      if (profile != null && ApplyEntries(profile.Entries)) {
+        return;
+      }
+
       float silentCoef = normalizedProfileName == SilentProfileName ? 0.8f : 1f;
-
-      if (TryLoadConfigProfile(normalizedProfileName)) {
-        return;
-      }
-
-      if (TryLoadLegacyTextProfile(normalizedProfileName)) {
-        SaveActiveProfile(normalizedProfileName);
-        return;
-      }
-
       LoadDefaultFanConfig(silentCoef);
-      SaveActiveProfile(normalizedProfileName);
+      SaveActiveProfile(normalizedProfileName, profiles);
     }
 
     public int GetFanSpeedForTemperature(float cpuTemp, float gpuTemp, bool monitorGpu, int fanIndex) {
@@ -79,74 +74,6 @@ namespace OmenSuperHub {
         int gpuFanSpeed = GetFanSpeedForSpecificTemperature(gpuTemp, gpuTempFanMap, fanIndex);
         return Math.Max(cpuFanSpeed, gpuFanSpeed);
       }
-    }
-
-    bool TryLoadConfigProfile(string profileName) {
-      if (!TryReadDocument(out FanCurveConfigDocument document) || document?.Profiles == null) {
-        return false;
-      }
-
-      FanCurveConfigProfile profile = document.Profiles.FirstOrDefault(item =>
-        string.Equals(item?.Name, profileName, StringComparison.OrdinalIgnoreCase));
-
-      return profile != null && ApplyEntries(profile.Entries);
-    }
-
-    bool TryLoadLegacyTextProfile(string profileName) {
-      string legacyFileName = profileName == CoolProfileName ? "cool.txt" : "silent.txt";
-      string legacyFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, legacyFileName);
-      if (!File.Exists(legacyFilePath)) {
-        return false;
-      }
-
-      try {
-        List<FanCurveConfigEntry> entries = ParseLegacyLines(File.ReadAllLines(legacyFilePath));
-        return ApplyEntries(entries);
-      } catch {
-        return false;
-      }
-    }
-
-    static List<FanCurveConfigEntry> ParseLegacyLines(IEnumerable<string> lines) {
-      var entries = new List<FanCurveConfigEntry>();
-      if (lines == null) {
-        return entries;
-      }
-
-      bool isFirstLine = true;
-      foreach (string line in lines) {
-        if (isFirstLine) {
-          isFirstLine = false;
-          continue;
-        }
-
-        if (string.IsNullOrWhiteSpace(line)) {
-          continue;
-        }
-
-        string[] parts = line.Split(',');
-        if (parts.Length != 6) {
-          throw new InvalidDataException("Legacy fan curve format is invalid.");
-        }
-
-        if (float.TryParse(parts[0], out float cpuTemp) &&
-            int.TryParse(parts[1], out int cpuFan1Speed) &&
-            int.TryParse(parts[2], out int cpuFan2Speed) &&
-            float.TryParse(parts[3], out float gpuTemp) &&
-            int.TryParse(parts[4], out int gpuFan1Speed) &&
-            int.TryParse(parts[5], out int gpuFan2Speed)) {
-          entries.Add(new FanCurveConfigEntry {
-            CpuTemperature = cpuTemp,
-            CpuFan1Rpm = cpuFan1Speed,
-            CpuFan2Rpm = cpuFan2Speed,
-            GpuTemperature = gpuTemp,
-            GpuFan1Rpm = gpuFan1Speed,
-            GpuFan2Rpm = gpuFan2Speed
-          });
-        }
-      }
-
-      return entries;
     }
 
     void LoadDefaultFanConfig(float silentCoef) {
@@ -170,7 +97,6 @@ namespace OmenSuperHub {
       for (int i = 0; i < numberOfEntries; i++) {
         int baseIndex = 2 + i * 3;
         int tempThreshold = fanTableBytes[baseIndex + 2];
-
         if (tempThreshold < originalMin) {
           originalMin = tempThreshold;
         }
@@ -188,13 +114,9 @@ namespace OmenSuperHub {
         int fan1Speed = fanTableBytes[baseIndex];
         int fan2Speed = fanTableBytes[baseIndex + 1];
         int originalTempThreshold = fanTableBytes[baseIndex + 2];
-        float cpuTempThreshold;
-        if (originalMax == originalMin) {
-          cpuTempThreshold = targetMin;
-        } else {
-          cpuTempThreshold = targetMin +
-              (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
-        }
+        float cpuTempThreshold = originalMax == originalMin
+          ? targetMin
+          : targetMin + (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
 
         entries.Add(new FanCurveConfigEntry {
           CpuTemperature = cpuTempThreshold,
@@ -224,9 +146,10 @@ namespace OmenSuperHub {
         return false;
       }
 
-      var normalizedEntries = entries
+      List<FanCurveConfigEntry> normalizedEntries = entries
         .Where(entry => entry != null)
         .OrderBy(entry => entry.CpuTemperature)
+        .Select(CloneEntry)
         .ToList();
 
       if (normalizedEntries.Count == 0) {
@@ -248,25 +171,20 @@ namespace OmenSuperHub {
       return true;
     }
 
-    void SaveActiveProfile(string profileName) {
-      FanCurveConfigDocument document = ReadDocumentOrDefault();
-      if (document.Profiles == null) {
-        document.Profiles = new List<FanCurveConfigProfile>();
-      }
+    void SaveActiveProfile(string profileName, List<FanCurveConfigProfile> profiles) {
+      List<FanCurveConfigProfile> snapshot = profiles == null
+        ? new List<FanCurveConfigProfile>()
+        : profiles
+            .Where(profile => profile != null)
+            .Select(CloneProfile)
+            .ToList();
 
-      document.Profiles.RemoveAll(profile =>
-        string.Equals(profile?.Name, profileName, StringComparison.OrdinalIgnoreCase));
-
-      document.Profiles.Add(new FanCurveConfigProfile {
-        Name = NormalizeProfileName(profileName),
+      snapshot.RemoveAll(profile => string.Equals(profile.Name, profileName, StringComparison.OrdinalIgnoreCase));
+      snapshot.Add(new FanCurveConfigProfile {
+        Name = profileName,
         Entries = GetActiveEntriesSnapshot()
       });
-
-      Directory.CreateDirectory(Path.GetDirectoryName(configFilePath));
-      using (var stream = File.Create(configFilePath)) {
-        var serializer = new XmlSerializer(typeof(FanCurveConfigDocument));
-        serializer.Serialize(stream, document);
-      }
+      settingsService.SaveFanCurveProfiles(snapshot);
     }
 
     List<FanCurveConfigEntry> GetActiveEntriesSnapshot() {
@@ -275,33 +193,7 @@ namespace OmenSuperHub {
       }
     }
 
-    FanCurveConfigDocument ReadDocumentOrDefault() {
-      return TryReadDocument(out FanCurveConfigDocument document) ? document : new FanCurveConfigDocument();
-    }
-
-    bool TryReadDocument(out FanCurveConfigDocument document) {
-      document = null;
-      if (!File.Exists(configFilePath)) {
-        return false;
-      }
-
-      try {
-        using (var stream = File.OpenRead(configFilePath)) {
-          var serializer = new XmlSerializer(typeof(FanCurveConfigDocument));
-          document = serializer.Deserialize(stream) as FanCurveConfigDocument;
-          return document != null;
-        }
-      } catch {
-        document = null;
-        return false;
-      }
-    }
-
     static FanCurveConfigEntry CloneEntry(FanCurveConfigEntry entry) {
-      if (entry == null) {
-        return null;
-      }
-
       return new FanCurveConfigEntry {
         CpuTemperature = entry.CpuTemperature,
         CpuFan1Rpm = entry.CpuFan1Rpm,
@@ -312,6 +204,15 @@ namespace OmenSuperHub {
       };
     }
 
+    static FanCurveConfigProfile CloneProfile(FanCurveConfigProfile profile) {
+      return new FanCurveConfigProfile {
+        Name = profile.Name,
+        Entries = profile.Entries == null
+          ? new List<FanCurveConfigEntry>()
+          : profile.Entries.Select(CloneEntry).ToList()
+      };
+    }
+
     static string NormalizeProfileName(string profileName) {
       return string.Equals(profileName, CoolProfileName, StringComparison.OrdinalIgnoreCase)
         ? CoolProfileName
@@ -319,13 +220,13 @@ namespace OmenSuperHub {
     }
 
     static int GetFanSpeedForSpecificTemperature(float temperature, Dictionary<float, List<int>> tempFanMap, int fanIndex) {
-      var lowerBound = tempFanMap.Keys
+      float lowerBound = tempFanMap.Keys
                       .OrderBy(k => k)
                       .Where(t => t <= temperature)
                       .DefaultIfEmpty(tempFanMap.Keys.Min())
                       .LastOrDefault();
 
-      var upperBound = tempFanMap.Keys
+      float upperBound = tempFanMap.Keys
                       .OrderBy(k => k)
                       .Where(t => t > temperature)
                       .DefaultIfEmpty(tempFanMap.Keys.Max())
@@ -337,10 +238,7 @@ namespace OmenSuperHub {
 
       int lowerSpeed = tempFanMap[lowerBound][fanIndex];
       int upperSpeed = tempFanMap[upperBound][fanIndex];
-      float lowerTemp = lowerBound;
-      float upperTemp = upperBound;
-
-      float interpolatedSpeed = lowerSpeed + (upperSpeed - lowerSpeed) * (temperature - lowerTemp) / (upperTemp - lowerTemp);
+      float interpolatedSpeed = lowerSpeed + (upperSpeed - lowerSpeed) * (temperature - lowerBound) / (upperBound - lowerBound);
       return (int)interpolatedSpeed;
     }
   }

@@ -142,19 +142,21 @@ namespace OmenSuperHub.Tests {
     }
 
     [TestMethod]
-    public void FanCurveService_LoadConfig_SavesXmlProfileInsteadOfLegacyTextFile() {
+    public void FanCurveService_LoadConfig_SavesProfileIntoSingleSettingsFile() {
       string tempDir = Path.Combine(Path.GetTempPath(), "OmenSuperHub.Tests", Path.GetRandomFileName());
-      string configPath = Path.Combine(tempDir, "fan-curves.xml");
+      string configPath = Path.Combine(tempDir, "settings.json");
 
       Directory.CreateDirectory(tempDir);
       try {
-        var service = new FanCurveService(new FakeHardwareGateway(), configPath);
+        var settingsService = new AppSettingsService(configPath);
+        var service = new FanCurveService(new FakeHardwareGateway(), settingsService);
 
         service.LoadConfig("silent");
 
         Assert.IsTrue(File.Exists(configPath));
-        string xml = File.ReadAllText(configPath);
-        StringAssert.Contains(xml, "<Name>silent</Name>");
+        Assert.IsTrue(settingsService.TryLoadConfig(out AppSettingsSnapshot snapshot));
+        Assert.AreEqual(1, snapshot.FanCurveProfiles.Count);
+        Assert.AreEqual("silent", snapshot.FanCurveProfiles[0].Name);
         Assert.AreEqual(1600, service.GetFanSpeedForTemperature(50f, 40f, monitorGpu: false, fanIndex: 0));
       } finally {
         if (Directory.Exists(tempDir)) {

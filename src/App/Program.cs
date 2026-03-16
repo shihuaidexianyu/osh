@@ -327,7 +327,7 @@ namespace OmenSuperHub {
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly SettingsRestoreService settingsRestoreService = new SettingsRestoreService(settingsService);
     static readonly AppErrorLogService errorLogService = new AppErrorLogService(AppDomain.CurrentDomain.BaseDirectory);
-    static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
+    static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway, settingsService);
     static readonly DashboardSnapshotBuilder dashboardSnapshotBuilder = new DashboardSnapshotBuilder();
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
     static readonly HardwareTelemetryService hardwareTelemetryService = new HardwareTelemetryService(libreComputer, hardwareGateway);

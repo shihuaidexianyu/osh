@@ -57,19 +57,15 @@
 - `高级设置`
   - 应用行为、自启动、`OMEN` 按键、高级覆盖、策略参数
 
-配置会持久化到当前用户注册表项：
+所有配置统一保存到：
 
 ```text
-HKEY_CURRENT_USER\Software\OmenSuperHub
+%LocalAppData%\OmenSuperHub\settings.json
 ```
 
-风扇曲线预设不再生成 `cool.txt` / `silent.txt` 这类文本文件。当前版本会把风扇曲线配置保存到：
+当前版本把应用设置、智能功耗参数、风扇曲线预设统一保存到这一个 `JSON` 文件中，不再使用注册表，也不再生成 `cool.txt` / `silent.txt` / `fan-curves.xml` 这类独立配置文件。
 
-```text
-%LocalAppData%\OmenSuperHub\fan-curves.xml
-```
-
-默认情况下，文件中会保存 `silent` 和 `cool` 两套预设数据；如果发现旧版 `cool.txt` / `silent.txt`，程序会尝试迁移读取，但后续写回只使用新的 XML 配置文件。
+配置策略是“只认当前版本格式”，不会兼容读取旧版文本或 XML 风扇曲线文件。
 
 ## 构建
 
@@ -171,7 +167,7 @@ OmenSuperHub-windows-x64-release
 - 启动前建议关闭 `OmenCommandCenterBackground`，避免和官方 `OMEN Gaming Hub` 同时控制同一组 BIOS/WMI 接口
 - 如果长期用本项目替代 OGH，建议关闭 OGH 自启动，再启用 `OmenSuperHub` 自启动
 - `OMEN` 按键默认行为现在是“打开本应用主页面”，如果你更喜欢快捷控制浮窗，可以在设置里改成“切换浮窗显示”
-- 风扇曲线配置现在统一写入 `%LocalAppData%\OmenSuperHub\fan-curves.xml`，不再依赖部署目录下的 `cool.txt` / `silent.txt`
+- 风扇曲线配置现在统一收敛到 `%LocalAppData%\OmenSuperHub\settings.json`，不再依赖部署目录、注册表或独立的 `cool.txt` / `silent.txt`
 - 某些硬件状态在唤醒、切电源、驱动恢复后会延迟数秒回稳，这是当前硬件接口本身的特性之一
 
 ## 遥测与数据来源

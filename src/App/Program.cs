@@ -137,7 +137,7 @@ namespace OmenSuperHub {
 
     static void ApplyFanTable(FanTableOption value, string persistConfigName = null) {
       fanTable = RuntimeControlSettings.ToStorageValue(value);
-      LoadFanConfig(value == FanTableOption.Cool ? "cool.txt" : "silent.txt");
+      LoadFanConfig(RuntimeControlSettings.ToStorageValue(value));
       PersistControlMutation(persistConfigName);
     }
 
@@ -625,8 +625,6 @@ namespace OmenSuperHub {
     public static void CleanUpAndRemoveTasks() {
       string targetFolder = @"C:\Program Files\OmenSuperHub";
       string taskName = "Omen Boot";
-      string file1 = @"C:\Windows\SysWOW64\silent.txt";
-      string file2 = @"C:\Windows\SysWOW64\cool.txt";
 
       if (Directory.Exists(targetFolder)) {
         string command = $"rd /s /q \"{targetFolder}\"";
@@ -634,24 +632,6 @@ namespace OmenSuperHub {
         Console.WriteLine(result.Output);
       } else {
         Console.WriteLine("旧文件夹不存在");
-      }
-
-      if (File.Exists(file1)) {
-        string command = $"del /f /q \"{file1}\"";
-        var result = ExecuteCommand(command);
-        Console.WriteLine($"文件已删除: {file1}");
-        Console.WriteLine(result.Output);
-      } else {
-        Console.WriteLine($"文件不存在: {file1}");
-      }
-
-      if (File.Exists(file2)) {
-        string command = $"del /f /q \"{file2}\"";
-        var result = ExecuteCommand(command);
-        Console.WriteLine($"文件已删除: {file2}");
-        Console.WriteLine(result.Output);
-      } else {
-        Console.WriteLine($"文件不存在: {file2}");
       }
 
       string taskQueryCommand = $"schtasks /query /tn \"{taskName}\"";
@@ -1027,8 +1007,8 @@ namespace OmenSuperHub {
         MainForm.IsVisibleOnScreen));
     }
 
-    static void LoadFanConfig(string filePath) {
-      fanCurveService.LoadConfig(filePath);
+    static void LoadFanConfig(string profileName) {
+      fanCurveService.LoadConfig(profileName);
     }
 
     static void SavePowerControlTuning() {

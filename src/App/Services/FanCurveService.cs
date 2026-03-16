@@ -3,58 +3,66 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using System.Xml.Serialization;
 
 namespace OmenSuperHub {
+  [Serializable]
+  public sealed class FanCurveConfigEntry {
+    public float CpuTemperature { get; set; }
+    public int CpuFan1Rpm { get; set; }
+    public int CpuFan2Rpm { get; set; }
+    public float GpuTemperature { get; set; }
+    public int GpuFan1Rpm { get; set; }
+    public int GpuFan2Rpm { get; set; }
+  }
+
+  [Serializable]
+  public sealed class FanCurveConfigProfile {
+    public string Name { get; set; }
+    public List<FanCurveConfigEntry> Entries { get; set; } = new List<FanCurveConfigEntry>();
+  }
+
+  [Serializable]
+  public sealed class FanCurveConfigDocument {
+    public List<FanCurveConfigProfile> Profiles { get; set; } = new List<FanCurveConfigProfile>();
+  }
+
   internal sealed class FanCurveService {
+    const string SilentProfileName = "silent";
+    const string CoolProfileName = "cool";
+
     readonly IOmenHardwareGateway hardwareGateway;
     readonly object fanMapLock = new object();
     readonly Dictionary<float, List<int>> cpuTempFanMap = new Dictionary<float, List<int>>();
     readonly Dictionary<float, List<int>> gpuTempFanMap = new Dictionary<float, List<int>>();
+    readonly string configFilePath;
+    List<FanCurveConfigEntry> activeEntries = new List<FanCurveConfigEntry>();
 
-    public FanCurveService(IOmenHardwareGateway hardwareGateway) {
+    public FanCurveService(IOmenHardwareGateway hardwareGateway, string configFilePath = null) {
       this.hardwareGateway = hardwareGateway;
+      this.configFilePath = string.IsNullOrWhiteSpace(configFilePath)
+        ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OmenSuperHub",
+            "fan-curves.xml")
+        : configFilePath;
     }
 
-    public void LoadConfig(string filePath) {
-      float silentCoef = filePath == "silent.txt" ? 0.8f : 1f;
-      string absoluteFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filePath);
-      if (File.Exists(absoluteFilePath)) {
-        lock (fanMapLock) {
-          cpuTempFanMap.Clear();
-          gpuTempFanMap.Clear();
-        }
+    public void LoadConfig(string profileName) {
+      string normalizedProfileName = NormalizeProfileName(profileName);
+      float silentCoef = normalizedProfileName == SilentProfileName ? 0.8f : 1f;
 
-        var lines = File.ReadAllLines(absoluteFilePath);
-        for (int i = 1; i < lines.Length; i++) {
-          var parts = lines[i].Split(',');
-          if (parts.Length == 6) {
-            float cpuTemp;
-            int cpuFan1Speed;
-            int cpuFan2Speed;
-            float gpuTemp;
-            int gpuFan1Speed;
-            int gpuFan2Speed;
-            if (float.TryParse(parts[0], out cpuTemp) &&
-                int.TryParse(parts[1], out cpuFan1Speed) &&
-                int.TryParse(parts[2], out cpuFan2Speed) &&
-                float.TryParse(parts[3], out gpuTemp) &&
-                int.TryParse(parts[4], out gpuFan1Speed) &&
-                int.TryParse(parts[5], out gpuFan2Speed)) {
-              lock (fanMapLock) {
-                cpuTempFanMap[cpuTemp] = new List<int> { cpuFan1Speed, cpuFan2Speed };
-                gpuTempFanMap[gpuTemp] = new List<int> { gpuFan1Speed, gpuFan2Speed };
-              }
-            }
-          } else {
-            Console.WriteLine($"{absoluteFilePath} error.");
-            LoadDefaultFanConfig(absoluteFilePath, silentCoef);
-            return;
-          }
-        }
-      } else {
-        Console.WriteLine($"{absoluteFilePath} not found.");
-        LoadDefaultFanConfig(absoluteFilePath, silentCoef);
+      if (TryLoadConfigProfile(normalizedProfileName)) {
+        return;
       }
+
+      if (TryLoadLegacyTextProfile(normalizedProfileName)) {
+        SaveActiveProfile(normalizedProfileName);
+        return;
+      }
+
+      LoadDefaultFanConfig(silentCoef);
+      SaveActiveProfile(normalizedProfileName);
     }
 
     public int GetFanSpeedForTemperature(float cpuTemp, float gpuTemp, bool monitorGpu, int fanIndex) {
@@ -73,17 +81,85 @@ namespace OmenSuperHub {
       }
     }
 
-    void LoadDefaultFanConfig(string filePath, float silentCoef) {
+    bool TryLoadConfigProfile(string profileName) {
+      if (!TryReadDocument(out FanCurveConfigDocument document) || document?.Profiles == null) {
+        return false;
+      }
+
+      FanCurveConfigProfile profile = document.Profiles.FirstOrDefault(item =>
+        string.Equals(item?.Name, profileName, StringComparison.OrdinalIgnoreCase));
+
+      return profile != null && ApplyEntries(profile.Entries);
+    }
+
+    bool TryLoadLegacyTextProfile(string profileName) {
+      string legacyFileName = profileName == CoolProfileName ? "cool.txt" : "silent.txt";
+      string legacyFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, legacyFileName);
+      if (!File.Exists(legacyFilePath)) {
+        return false;
+      }
+
+      try {
+        List<FanCurveConfigEntry> entries = ParseLegacyLines(File.ReadAllLines(legacyFilePath));
+        return ApplyEntries(entries);
+      } catch {
+        return false;
+      }
+    }
+
+    static List<FanCurveConfigEntry> ParseLegacyLines(IEnumerable<string> lines) {
+      var entries = new List<FanCurveConfigEntry>();
+      if (lines == null) {
+        return entries;
+      }
+
+      bool isFirstLine = true;
+      foreach (string line in lines) {
+        if (isFirstLine) {
+          isFirstLine = false;
+          continue;
+        }
+
+        if (string.IsNullOrWhiteSpace(line)) {
+          continue;
+        }
+
+        string[] parts = line.Split(',');
+        if (parts.Length != 6) {
+          throw new InvalidDataException("Legacy fan curve format is invalid.");
+        }
+
+        if (float.TryParse(parts[0], out float cpuTemp) &&
+            int.TryParse(parts[1], out int cpuFan1Speed) &&
+            int.TryParse(parts[2], out int cpuFan2Speed) &&
+            float.TryParse(parts[3], out float gpuTemp) &&
+            int.TryParse(parts[4], out int gpuFan1Speed) &&
+            int.TryParse(parts[5], out int gpuFan2Speed)) {
+          entries.Add(new FanCurveConfigEntry {
+            CpuTemperature = cpuTemp,
+            CpuFan1Rpm = cpuFan1Speed,
+            CpuFan2Rpm = cpuFan2Speed,
+            GpuTemperature = gpuTemp,
+            GpuFan1Rpm = gpuFan1Speed,
+            GpuFan2Rpm = gpuFan2Speed
+          });
+        }
+      }
+
+      return entries;
+    }
+
+    void LoadDefaultFanConfig(float silentCoef) {
       byte[] fanTableBytes = hardwareGateway.GetFanTable();
       if (fanTableBytes == null || fanTableBytes.Length < 3) {
-        GenerateDefaultMapping(filePath);
+        GenerateDefaultMapping();
         return;
       }
 
       int numberOfFans = fanTableBytes[0];
       if (numberOfFans != 2) {
         MessageBox.Show("本机型不受支持！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        GenerateDefaultMapping(filePath);
+        GenerateDefaultMapping();
         return;
       }
 
@@ -105,68 +181,141 @@ namespace OmenSuperHub {
 
       float targetMin = 50.0f;
       float targetMax = 97.0f;
+      var entries = new List<FanCurveConfigEntry>();
 
-      lock (fanMapLock) {
-        cpuTempFanMap.Clear();
-        gpuTempFanMap.Clear();
-
-        for (int i = 0; i < numberOfEntries; i++) {
-          int baseIndex = 2 + i * 3;
-          int fan1Speed = fanTableBytes[baseIndex];
-          int fan2Speed = fanTableBytes[baseIndex + 1];
-          int originalTempThreshold = fanTableBytes[baseIndex + 2];
-          float cpuTempThreshold;
-          if (originalMax == originalMin) {
-            cpuTempThreshold = targetMin;
-          } else {
-            cpuTempThreshold = targetMin +
-                (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
-          }
-          float gpuTempThreshold = cpuTempThreshold - 10.0f;
-
-          if (!cpuTempFanMap.ContainsKey(cpuTempThreshold)) {
-            cpuTempFanMap[cpuTempThreshold] = new List<int>();
-          }
-          cpuTempFanMap[cpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
-          cpuTempFanMap[cpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
-
-          if (!gpuTempFanMap.ContainsKey(gpuTempThreshold)) {
-            gpuTempFanMap[gpuTempThreshold] = new List<int>();
-          }
-          gpuTempFanMap[gpuTempThreshold].Add((int)(fan1Speed * silentCoef) * 100);
-          gpuTempFanMap[gpuTempThreshold].Add((int)(fan2Speed * silentCoef) * 100);
+      for (int i = 0; i < numberOfEntries; i++) {
+        int baseIndex = 2 + i * 3;
+        int fan1Speed = fanTableBytes[baseIndex];
+        int fan2Speed = fanTableBytes[baseIndex + 1];
+        int originalTempThreshold = fanTableBytes[baseIndex + 2];
+        float cpuTempThreshold;
+        if (originalMax == originalMin) {
+          cpuTempThreshold = targetMin;
+        } else {
+          cpuTempThreshold = targetMin +
+              (originalTempThreshold - originalMin) * (targetMax - targetMin) / (originalMax - originalMin);
         }
+
+        entries.Add(new FanCurveConfigEntry {
+          CpuTemperature = cpuTempThreshold,
+          CpuFan1Rpm = (int)(fan1Speed * silentCoef) * 100,
+          CpuFan2Rpm = (int)(fan2Speed * silentCoef) * 100,
+          GpuTemperature = cpuTempThreshold - 10.0f,
+          GpuFan1Rpm = (int)(fan1Speed * silentCoef) * 100,
+          GpuFan2Rpm = (int)(fan2Speed * silentCoef) * 100
+        });
       }
 
-      List<string> lines;
-      lock (fanMapLock) {
-        lines = new List<string> { "CPU,Fan1,Fan2,GPU,Fan1,Fan2" };
-        lines.AddRange(cpuTempFanMap.Select(kvp =>
-            $"{kvp.Key:F0},{kvp.Value[0]},{kvp.Value[1]},{kvp.Key - 10.0:F0},{kvp.Value[0]},{kvp.Value[1]}"));
-      }
-      File.WriteAllLines(filePath, lines);
+      ApplyEntries(entries);
     }
 
-    void GenerateDefaultMapping(string filePath) {
-      List<string> lines;
+    void GenerateDefaultMapping() {
+      ApplyEntries(new List<FanCurveConfigEntry> {
+        new FanCurveConfigEntry { CpuTemperature = 30f, CpuFan1Rpm = 0, CpuFan2Rpm = 0, GpuTemperature = 20f, GpuFan1Rpm = 0, GpuFan2Rpm = 0 },
+        new FanCurveConfigEntry { CpuTemperature = 50f, CpuFan1Rpm = 1600, CpuFan2Rpm = 1900, GpuTemperature = 40f, GpuFan1Rpm = 1600, GpuFan2Rpm = 1900 },
+        new FanCurveConfigEntry { CpuTemperature = 60f, CpuFan1Rpm = 2000, CpuFan2Rpm = 2300, GpuTemperature = 50f, GpuFan1Rpm = 2000, GpuFan2Rpm = 2300 },
+        new FanCurveConfigEntry { CpuTemperature = 85f, CpuFan1Rpm = 4000, CpuFan2Rpm = 4300, GpuTemperature = 75f, GpuFan1Rpm = 4000, GpuFan2Rpm = 4300 },
+        new FanCurveConfigEntry { CpuTemperature = 100f, CpuFan1Rpm = 6100, CpuFan2Rpm = 6400, GpuTemperature = 90f, GpuFan1Rpm = 6100, GpuFan2Rpm = 6400 }
+      });
+    }
+
+    bool ApplyEntries(IEnumerable<FanCurveConfigEntry> entries) {
+      if (entries == null) {
+        return false;
+      }
+
+      var normalizedEntries = entries
+        .Where(entry => entry != null)
+        .OrderBy(entry => entry.CpuTemperature)
+        .ToList();
+
+      if (normalizedEntries.Count == 0) {
+        return false;
+      }
+
       lock (fanMapLock) {
         cpuTempFanMap.Clear();
-        cpuTempFanMap[30] = new List<int> { 0, 0 };
-        cpuTempFanMap[50] = new List<int> { 1600, 1900 };
-        cpuTempFanMap[60] = new List<int> { 2000, 2300 };
-        cpuTempFanMap[85] = new List<int> { 4000, 4300 };
-        cpuTempFanMap[100] = new List<int> { 6100, 6400 };
-
         gpuTempFanMap.Clear();
-        foreach (var kvp in cpuTempFanMap) {
-          gpuTempFanMap[kvp.Key - 10] = new List<int> { kvp.Value[0], kvp.Value[1] };
-        }
+        activeEntries = new List<FanCurveConfigEntry>();
 
-        lines = new List<string> { "CPU,Fan1,Fan2,GPU,Fan1,Fan2" };
-        lines.AddRange(cpuTempFanMap.Select(kvp =>
-            $"{kvp.Key:F0},{kvp.Value[0]},{kvp.Value[1]},{kvp.Key - 10:F0},{kvp.Value[0]},{kvp.Value[1]}"));
+        foreach (FanCurveConfigEntry entry in normalizedEntries) {
+          cpuTempFanMap[entry.CpuTemperature] = new List<int> { entry.CpuFan1Rpm, entry.CpuFan2Rpm };
+          gpuTempFanMap[entry.GpuTemperature] = new List<int> { entry.GpuFan1Rpm, entry.GpuFan2Rpm };
+          activeEntries.Add(CloneEntry(entry));
+        }
       }
-      File.WriteAllLines(filePath, lines);
+
+      return true;
+    }
+
+    void SaveActiveProfile(string profileName) {
+      FanCurveConfigDocument document = ReadDocumentOrDefault();
+      if (document.Profiles == null) {
+        document.Profiles = new List<FanCurveConfigProfile>();
+      }
+
+      document.Profiles.RemoveAll(profile =>
+        string.Equals(profile?.Name, profileName, StringComparison.OrdinalIgnoreCase));
+
+      document.Profiles.Add(new FanCurveConfigProfile {
+        Name = NormalizeProfileName(profileName),
+        Entries = GetActiveEntriesSnapshot()
+      });
+
+      Directory.CreateDirectory(Path.GetDirectoryName(configFilePath));
+      using (var stream = File.Create(configFilePath)) {
+        var serializer = new XmlSerializer(typeof(FanCurveConfigDocument));
+        serializer.Serialize(stream, document);
+      }
+    }
+
+    List<FanCurveConfigEntry> GetActiveEntriesSnapshot() {
+      lock (fanMapLock) {
+        return activeEntries.Select(CloneEntry).ToList();
+      }
+    }
+
+    FanCurveConfigDocument ReadDocumentOrDefault() {
+      return TryReadDocument(out FanCurveConfigDocument document) ? document : new FanCurveConfigDocument();
+    }
+
+    bool TryReadDocument(out FanCurveConfigDocument document) {
+      document = null;
+      if (!File.Exists(configFilePath)) {
+        return false;
+      }
+
+      try {
+        using (var stream = File.OpenRead(configFilePath)) {
+          var serializer = new XmlSerializer(typeof(FanCurveConfigDocument));
+          document = serializer.Deserialize(stream) as FanCurveConfigDocument;
+          return document != null;
+        }
+      } catch {
+        document = null;
+        return false;
+      }
+    }
+
+    static FanCurveConfigEntry CloneEntry(FanCurveConfigEntry entry) {
+      if (entry == null) {
+        return null;
+      }
+
+      return new FanCurveConfigEntry {
+        CpuTemperature = entry.CpuTemperature,
+        CpuFan1Rpm = entry.CpuFan1Rpm,
+        CpuFan2Rpm = entry.CpuFan2Rpm,
+        GpuTemperature = entry.GpuTemperature,
+        GpuFan1Rpm = entry.GpuFan1Rpm,
+        GpuFan2Rpm = entry.GpuFan2Rpm
+      };
+    }
+
+    static string NormalizeProfileName(string profileName) {
+      return string.Equals(profileName, CoolProfileName, StringComparison.OrdinalIgnoreCase)
+        ? CoolProfileName
+        : SilentProfileName;
     }
 
     static int GetFanSpeedForSpecificTemperature(float temperature, Dictionary<float, List<int>> tempFanMap, int fanIndex) {

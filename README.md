@@ -63,6 +63,14 @@
 HKEY_CURRENT_USER\Software\OmenSuperHub
 ```
 
+风扇曲线预设不再生成 `cool.txt` / `silent.txt` 这类文本文件。当前版本会把风扇曲线配置保存到：
+
+```text
+%LocalAppData%\OmenSuperHub\fan-curves.xml
+```
+
+默认情况下，文件中会保存 `silent` 和 `cool` 两套预设数据；如果发现旧版 `cool.txt` / `silent.txt`，程序会尝试迁移读取，但后续写回只使用新的 XML 配置文件。
+
 ## 构建
 
 ### 1. 还原依赖
@@ -75,7 +83,36 @@ msbuild OmenSuperHub.sln /t:Restore /p:RestorePackagesConfig=true /v:minimal
 
 如果你的环境里没有把 `msbuild` 加到 `PATH`，也可以直接使用 Visual Studio 自带的完整路径。
 
-### 2. 本地构建
+### 2. 构建环境依赖
+
+本地开发或 CI 构建至少需要：
+
+- Visual Studio 2022 或 Build Tools 中可用的 `MSBuild`
+- `.NET SDK`
+- `.NET Framework 4.8 Developer Pack`
+- Windows 环境下的 `x64` 构建能力
+
+### 3. 运行时依赖
+
+项目里已经内置并引用了 `LibreHardwareMonitor-pawnio-squashed` 源码，所以构建时不需要你额外再下载这一份库。
+
+但运行时仍有一个重要前提：
+
+- `PawnIO`
+
+当前 Intel CPU 的部分底层遥测依赖 `PawnIO` 提供的 `PawnIOLib`。如果目标机器没有正确安装 `PawnIO`，程序依然可以启动，但你可能会看到这些影响：
+
+- `Intel CPU 温度`
+- `Intel CPU 功耗`
+
+读数缺失、异常，或者退回到有限的传感器路径。
+
+也就是说：
+
+- 构建依赖：仓库里已经带了 `LibreHardwareMonitor-pawnio-squashed`
+- 运行依赖：目标系统仍需要能正常加载 `PawnIO`
+
+### 4. 本地构建
 
 调试版：
 
@@ -134,6 +171,7 @@ OmenSuperHub-windows-x64-release
 - 启动前建议关闭 `OmenCommandCenterBackground`，避免和官方 `OMEN Gaming Hub` 同时控制同一组 BIOS/WMI 接口
 - 如果长期用本项目替代 OGH，建议关闭 OGH 自启动，再启用 `OmenSuperHub` 自启动
 - `OMEN` 按键默认行为现在是“打开本应用主页面”，如果你更喜欢快捷控制浮窗，可以在设置里改成“切换浮窗显示”
+- 风扇曲线配置现在统一写入 `%LocalAppData%\OmenSuperHub\fan-curves.xml`，不再依赖部署目录下的 `cool.txt` / `silent.txt`
 - 某些硬件状态在唤醒、切电源、驱动恢复后会延迟数秒回稳，这是当前硬件接口本身的特性之一
 
 ## 遥测与数据来源

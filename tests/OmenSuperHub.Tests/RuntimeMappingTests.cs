@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using static OmenSuperHub.OmenHardware;
 
@@ -138,6 +139,28 @@ namespace OmenSuperHub.Tests {
       Assert.AreEqual("right", status.FloatingLocation);
       Assert.AreEqual(36, status.FloatingTextSize);
       Assert.AreEqual(@"C:\App\\custom.ico".Replace(@"\\", @"\"), status.CustomIconPath);
+    }
+
+    [TestMethod]
+    public void FanCurveService_LoadConfig_SavesXmlProfileInsteadOfLegacyTextFile() {
+      string tempDir = Path.Combine(Path.GetTempPath(), "OmenSuperHub.Tests", Path.GetRandomFileName());
+      string configPath = Path.Combine(tempDir, "fan-curves.xml");
+
+      Directory.CreateDirectory(tempDir);
+      try {
+        var service = new FanCurveService(new FakeHardwareGateway(), configPath);
+
+        service.LoadConfig("silent");
+
+        Assert.IsTrue(File.Exists(configPath));
+        string xml = File.ReadAllText(configPath);
+        StringAssert.Contains(xml, "<Name>silent</Name>");
+        Assert.AreEqual(1600, service.GetFanSpeedForTemperature(50f, 40f, monitorGpu: false, fanIndex: 0));
+      } finally {
+        if (Directory.Exists(tempDir)) {
+          Directory.Delete(tempDir, recursive: true);
+        }
+      }
     }
 
     static List<string> GetSelectionKeys(SettingsRestorePlan plan) {

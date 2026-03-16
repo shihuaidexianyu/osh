@@ -417,7 +417,7 @@ namespace OmenSuperHub {
       var card = CreateCard(430);
       var root = new StackPanel();
       root.Children.Add(CreateSectionTitle("高级覆盖"));
-      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。这里的修改会让当前模式进入自定义，显卡模式切换通常需要重新登录或重启后完全生效。"));
+      root.Children.Add(CreateSectionSubtitle("只有在预设模式不满足需求时，才需要手动改写底层参数。这里的修改会让当前模式进入自定义。"));
 
       fanModeComboBox = CreateComboBox(fanModeItems, FanModeComboBox_SelectionChanged);
       fanControlComboBox = CreateComboBox(fanControlModeItems, FanControlComboBox_SelectionChanged);
@@ -427,7 +427,6 @@ namespace OmenSuperHub {
 
       cpuPowerComboBox = CreateComboBox(cpuPowerItems, CpuPowerComboBox_SelectionChanged);
       gpuPowerComboBox = CreateComboBox(gpuPowerItems, GpuPowerComboBox_SelectionChanged);
-      graphicsModeComboBox = CreateComboBox(graphicsModeItems, GraphicsModeComboBox_SelectionChanged);
       gpuClockComboBox = CreateComboBox(gpuClockItems, GpuClockComboBox_SelectionChanged);
 
       var advancedGrid = CreateSettingsGrid();
@@ -438,8 +437,7 @@ namespace OmenSuperHub {
       AddControlRow(advancedGrid, 5, "温度响应", tempSensitivityComboBox);
       AddControlRow(advancedGrid, 6, "CPU 功率", cpuPowerComboBox);
       AddControlRow(advancedGrid, 7, "GPU 策略", gpuPowerComboBox);
-      AddControlRow(advancedGrid, 8, "显卡模式", graphicsModeComboBox);
-      AddControlRow(advancedGrid, 9, "GPU 锁频", gpuClockComboBox);
+      AddControlRow(advancedGrid, 8, "GPU 锁频", gpuClockComboBox);
 
       root.Children.Add(advancedGrid);
       card.Child = root;
@@ -463,7 +461,7 @@ namespace OmenSuperHub {
       smartPowerControlCheckBox.Unchecked += SmartPowerControlCheckBox_Changed;
 
       var hintText = new TextBlock {
-        Text = "安静：优先低噪声和低功耗 | 均衡：默认日常模式 | 性能：优先负载表现，但仍受温度墙保护 | MAX：关闭智能限制、强制最大风扇并切到独显直连",
+        Text = "安静：优先低噪声和低功耗 | 均衡：默认日常模式 | 性能：优先负载表现，但仍受温度墙保护 | MAX：关闭智能限制、强制最大风扇",
         Foreground = mutedText,
         FontSize = 12,
         TextWrapping = TextWrapping.Wrap,

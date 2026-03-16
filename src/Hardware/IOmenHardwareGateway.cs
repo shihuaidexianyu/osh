@@ -8,7 +8,6 @@ namespace OmenSuperHub {
     byte[] GetFanTable();
     OmenFanTypeInfo GetFanTypeInfo();
     OmenGfxMode GetGraphicsMode();
-    void SetGraphicsMode(OmenGfxMode mode);
     OmenGpuStatus GetGpuStatus();
     OmenSystemDesignData GetSystemDesignData();
     void SetFanLevel(int fanSpeed1, int fanSpeed2);

@@ -8,7 +8,6 @@ namespace OmenSuperHub {
     void ApplyTempSensitivitySetting(string value);
     void ApplyCpuPowerSetting(string value);
     void ApplyGpuPowerSetting(string value);
-    void ApplyGraphicsModeSetting(string value);
     void ApplyGpuClockSetting(int value);
     void ApplyFloatingBarSetting(bool enabled);
     void ApplyFloatingBarLocationSetting(string location);

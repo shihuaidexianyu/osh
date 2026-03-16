@@ -33,7 +33,6 @@ namespace OmenSuperHub {
     public string TempSensitivity { get; set; }
     public string CpuPowerSetting { get; set; }
     public string GpuPowerSetting { get; set; }
-    public string GraphicsModeSetting { get; set; }
     public int GpuClockLimit { get; set; }
     public bool FloatingBarEnabled { get; set; }
     public string FloatingBarLocation { get; set; }

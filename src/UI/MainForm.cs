@@ -56,7 +56,6 @@ namespace OmenSuperHub {
     readonly string[] tempSensitivityItems = { "高", "中", "低", "实时" };
     readonly string[] cpuPowerItems = { "最大", "45 W", "55 W", "65 W", "75 W", "90 W" };
     readonly string[] gpuPowerItems = { "高性能", "均衡", "节能" };
-    readonly string[] graphicsModeItems = { "混合输出", "独显直连", "Optimus" };
     readonly string[] gpuClockItems = { "还原", "1600 MHz", "1800 MHz", "2000 MHz", "2200 MHz", "2400 MHz" };
     readonly string[] floatingBarLocationItems = { "左上角", "右上角" };
 
@@ -124,7 +123,6 @@ namespace OmenSuperHub {
     ComboBox tempSensitivityComboBox;
     ComboBox cpuPowerComboBox;
     ComboBox gpuPowerComboBox;
-    ComboBox graphicsModeComboBox;
     ComboBox gpuClockComboBox;
     ComboBox floatingBarLocationComboBox;
     CheckBox smartPowerControlCheckBox;

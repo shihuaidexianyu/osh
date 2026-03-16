@@ -38,12 +38,6 @@ namespace OmenSuperHub {
     Max
   }
 
-  internal enum GraphicsModeOption {
-    Hybrid,
-    Discrete,
-    Optimus
-  }
-
   internal sealed class RuntimeControlSettings {
     public FanModeOption FanMode { get; set; } = FanModeOption.Default;
     public FanControlOption FanControl { get; set; } = FanControlOption.Auto;
@@ -53,7 +47,6 @@ namespace OmenSuperHub {
     public bool CpuPowerMax { get; set; }
     public int CpuPowerWatts { get; set; } = 65;
     public GpuPowerOption GpuPower { get; set; } = GpuPowerOption.Med;
-    public GraphicsModeOption GraphicsMode { get; set; } = GraphicsModeOption.Hybrid;
     public int GpuClockLimitMhz { get; set; }
     public bool SmartPowerControlEnabled { get; set; } = true;
 
@@ -70,7 +63,6 @@ namespace OmenSuperHub {
              CpuPowerMax == other.CpuPowerMax &&
              CpuPowerWatts == other.CpuPowerWatts &&
              GpuPower == other.GpuPower &&
-             GraphicsMode == other.GraphicsMode &&
              GpuClockLimitMhz == other.GpuClockLimitMhz &&
              SmartPowerControlEnabled == other.SmartPowerControlEnabled;
     }
@@ -86,7 +78,6 @@ namespace OmenSuperHub {
       snapshot.TempSensitivity = ToStorageValue(TempSensitivity);
       snapshot.CpuPower = ToCpuPowerStorageValue(CpuPowerMax, CpuPowerWatts);
       snapshot.GpuPower = ToStorageValue(GpuPower);
-      snapshot.GraphicsModeSetting = ToStorageValue(GraphicsMode);
       snapshot.GpuClock = Math.Max(0, GpuClockLimitMhz);
       snapshot.SmartPowerControlEnabled = SmartPowerControlEnabled;
     }
@@ -102,7 +93,6 @@ namespace OmenSuperHub {
             CpuPowerMax = false,
             CpuPowerWatts = 45,
             GpuPower = GpuPowerOption.Min,
-            GraphicsMode = GraphicsModeOption.Hybrid,
             GpuClockLimitMhz = 0,
             SmartPowerControlEnabled = true
           };
@@ -115,7 +105,6 @@ namespace OmenSuperHub {
             CpuPowerMax = true,
             CpuPowerWatts = 254,
             GpuPower = GpuPowerOption.Max,
-            GraphicsMode = GraphicsModeOption.Hybrid,
             GpuClockLimitMhz = 0,
             SmartPowerControlEnabled = true
           };
@@ -128,7 +117,6 @@ namespace OmenSuperHub {
             CpuPowerMax = true,
             CpuPowerWatts = 254,
             GpuPower = GpuPowerOption.Max,
-            GraphicsMode = GraphicsModeOption.Discrete,
             GpuClockLimitMhz = 0,
             SmartPowerControlEnabled = false
           };
@@ -141,7 +129,6 @@ namespace OmenSuperHub {
             CpuPowerMax = false,
             CpuPowerWatts = 65,
             GpuPower = GpuPowerOption.Med,
-            GraphicsMode = GraphicsModeOption.Hybrid,
             GpuClockLimitMhz = 0,
             SmartPowerControlEnabled = true
           };
@@ -162,7 +149,6 @@ namespace OmenSuperHub {
         CpuPowerMax = IsCpuPowerMax(snapshot.CpuPower),
         CpuPowerWatts = ParseCpuPowerWatts(snapshot.CpuPower),
         GpuPower = ParseGpuPower(snapshot.GpuPower),
-        GraphicsMode = ParseGraphicsMode(snapshot.GraphicsModeSetting),
         GpuClockLimitMhz = Math.Max(0, snapshot.GpuClock),
         SmartPowerControlEnabled = snapshot.SmartPowerControlEnabled
       };
@@ -318,26 +304,5 @@ namespace OmenSuperHub {
       }
     }
 
-    public static GraphicsModeOption ParseGraphicsMode(string value) {
-      switch ((value ?? string.Empty).ToLowerInvariant()) {
-        case "discrete":
-          return GraphicsModeOption.Discrete;
-        case "optimus":
-          return GraphicsModeOption.Optimus;
-        default:
-          return GraphicsModeOption.Hybrid;
-      }
-    }
-
-    public static string ToStorageValue(GraphicsModeOption value) {
-      switch (value) {
-        case GraphicsModeOption.Discrete:
-          return "discrete";
-        case GraphicsModeOption.Optimus:
-          return "optimus";
-        default:
-          return "hybrid";
-      }
-    }
   }
 }

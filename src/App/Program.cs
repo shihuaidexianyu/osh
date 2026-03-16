@@ -50,10 +50,6 @@ namespace OmenSuperHub {
       ApplyGpuPower(RuntimeControlSettings.ParseGpuPower(value), persistConfigName: "GpuPower");
     }
 
-    internal static void ApplyGraphicsModeSetting(string value) {
-      ApplyGraphicsMode(RuntimeControlSettings.ParseGraphicsMode(value), persistConfigName: "GraphicsMode");
-    }
-
     internal static void ApplyUsageModeSetting(string mode) {
       UsageModePreset preset = RuntimeControlSettings.ParseUsageMode(mode);
       if (preset == UsageModePreset.Custom) {
@@ -105,7 +101,6 @@ namespace OmenSuperHub {
       ApplyGpuPower(settings.GpuPower);
       ApplyGpuClock(settings.GpuClockLimitMhz);
       ApplySmartPowerControl(settings.SmartPowerControlEnabled);
-      ApplyGraphicsMode(settings.GraphicsMode);
     }
 
     static void ApplyFanMode(FanModeOption mode, string persistConfigName = null) {
@@ -169,12 +164,6 @@ namespace OmenSuperHub {
       gpuPower = RuntimeControlSettings.ToStorageValue(value);
       hardwareControlService.ApplyGpuPower(value);
       powerController.Reset();
-      PersistControlMutation(persistConfigName);
-    }
-
-    static void ApplyGraphicsMode(GraphicsModeOption value, string persistConfigName = null) {
-      GraphicsModeOption resolvedValue = hardwareControlService.ApplyGraphicsMode(value);
-      graphicsModeSetting = RuntimeControlSettings.ToStorageValue(resolvedValue);
       PersistControlMutation(persistConfigName);
     }
 
@@ -269,7 +258,7 @@ namespace OmenSuperHub {
     const int FanMaxRpm = 6400;
     const int FanRawStep = 100;
     const int FanMaxRawLevel = FanMaxRpm / FanRawStep;
-    static string usageMode = "balanced", fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", graphicsModeSetting = "hybrid", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
+    static string usageMode = "balanced", fanTable = "silent", fanMode = "performance", fanControl = "auto", tempSensitivity = "high", cpuPower = "max", gpuPower = "max", autoStart = "off", customIcon = "original", floatingBar = "off", floatingBarLoc = "left", omenKey = "default";
     static bool smartPowerControlEnabled = true;
     static string smartPowerControlState = "balanced";
     static string smartPowerControlReason = "stable";
@@ -676,29 +665,23 @@ namespace OmenSuperHub {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
       }
 
-      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Max))) {
+      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Max))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Max);
       }
 
-      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Quiet))) {
+      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Quiet))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Quiet);
       }
 
-      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Balanced))) {
+      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Balanced))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Balanced);
       }
 
-      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Performance))) {
+      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Performance))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Performance);
       }
 
       return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
-    }
-
-    static RuntimeControlSettings CreateResolvedPresetSettings(UsageModePreset preset) {
-      RuntimeControlSettings settings = RuntimeControlSettings.CreatePreset(preset);
-      settings.GraphicsMode = hardwareControlService.ResolveSupportedGraphicsMode(settings.GraphicsMode);
-      return settings;
     }
 
     static RuntimeControlSettings CreateCurrentControlSettings() {
@@ -711,7 +694,6 @@ namespace OmenSuperHub {
         CpuPowerMax = RuntimeControlSettings.IsCpuPowerMax(cpuPower),
         CpuPowerWatts = RuntimeControlSettings.ParseCpuPowerWatts(cpuPower),
         GpuPower = RuntimeControlSettings.ParseGpuPower(gpuPower),
-        GraphicsMode = RuntimeControlSettings.ParseGraphicsMode(graphicsModeSetting),
         GpuClockLimitMhz = Math.Max(0, gpuClock),
         SmartPowerControlEnabled = smartPowerControlEnabled
       };
@@ -918,7 +900,6 @@ namespace OmenSuperHub {
         TempSensitivity = tempSensitivity,
         CpuPowerSetting = cpuPower,
         GpuPowerSetting = gpuPower,
-        GraphicsModeSetting = graphicsModeSetting,
         GpuClockLimit = gpuClock,
         FloatingBarEnabled = floatingBar == "on",
         FloatingBarLocation = floatingBarLoc,
@@ -1231,10 +1212,6 @@ namespace OmenSuperHub {
 
     void IAppController.ApplyGpuPowerSetting(string value) {
       ApplyGpuPowerSetting(value);
-    }
-
-    void IAppController.ApplyGraphicsModeSetting(string value) {
-      ApplyGraphicsModeSetting(value);
     }
 
     void IAppController.ApplyGpuClockSetting(int value) {

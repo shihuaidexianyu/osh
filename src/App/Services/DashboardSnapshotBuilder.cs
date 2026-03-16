@@ -25,7 +25,6 @@ namespace OmenSuperHub {
         TempSensitivity = state.TempSensitivity,
         CpuPowerSetting = state.CpuPowerSetting,
         GpuPowerSetting = state.GpuPowerSetting,
-        GraphicsModeSetting = state.GraphicsModeSetting,
         GpuClockLimit = state.GpuClockLimit,
         FloatingBarEnabled = state.FloatingBarEnabled,
         FloatingBarLocation = state.FloatingBarLocation,

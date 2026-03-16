@@ -21,7 +21,9 @@ using System.IO.Pipes;
 
 namespace OmenSuperHub {
   internal sealed class AppRuntime : IAppController {
+    static AppRuntime currentInstance;
     static bool suppressUsageModeAutoMark;
+    Mutex singleInstanceMutex;
 
     static string NormalizeGraphicsModeSetting(string value) {
       return RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseGraphicsMode(value));
@@ -120,13 +122,13 @@ namespace OmenSuperHub {
       fanControl = RuntimeControlSettings.ToStorageValue(mode, manualFanRpm);
       if (mode == FanControlOption.Auto) {
         SetMaxFanSpeedOff();
-        fanControlTimer.Change(0, 1000);
+        backgroundScheduler?.SetFanControlLoopEnabled(true);
       } else if (mode == FanControlOption.Max) {
         SetMaxFanSpeedOn();
-        fanControlTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        backgroundScheduler?.SetFanControlLoopEnabled(false);
       } else {
         SetMaxFanSpeedOff();
-        fanControlTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        backgroundScheduler?.SetFanControlLoopEnabled(false);
         ApplyManualFanRpm(fanControl);
       }
 
@@ -321,9 +323,7 @@ namespace OmenSuperHub {
     static List<int> fanSpeedNow = new List<int> { 20, 23 };
     static List<TemperatureSensorReading> currentTemperatureSensors = new List<TemperatureSensorReading>();
     static float respondSpeed = 0.4f;
-    static System.Threading.Timer fanControlTimer;
-    static System.Threading.Timer hardwarePollingTimer;
-    static System.Windows.Forms.Timer checkFloatingTimer, optimiseTimer;
+    static AppBackgroundScheduler backgroundScheduler;
     static NamedPipeServerStream omenKeyPipeServer;
     static TaskEx omenKeyListenerTask;
     static int shutdownStarted = 0;
@@ -364,87 +364,123 @@ namespace OmenSuperHub {
       SetFanLevel(rawLevel, rawLevel);
     }
 
-    public void Run(string[] args) {
-      bool isNewInstance;
-      using (Mutex mutex = new Mutex(true, "MyUniqueAppMutex", out isNewInstance)) {
-        if (!isNewInstance) {
-          return;
-        }
+    void StartTimers() {
+      backgroundScheduler = new AppBackgroundScheduler(
+        optimiseSchedule,
+        HardwarePollingTick,
+        FanControlTick,
+        HandleFloatingBarToggle);
+      backgroundScheduler.Start();
+    }
 
-        if (Environment.OSVersion.Version.Major >= 6) {
-          SetProcessDPIAware();
-        }
+    void StartFloatingToggleTimer() {
+      backgroundScheduler?.SetFloatingToggleEnabled(true);
+    }
 
-        AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
-        Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
-        Application.ApplicationExit += new EventHandler(OnApplicationExit);
-
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
-        MainForm.Initialize(this);
-
-        powerOnline = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
-        Version version = Assembly.GetExecutingAssembly().GetName().Version;
-        string versionString = version.ToString().Replace(".", "");
-        alreadyReadCode = new Random(int.Parse(versionString)).Next(1000, 10000);
-
-        InitTrayIcon();
-
-        libreComputer.Open();
-
-        optimiseTimer = new System.Windows.Forms.Timer();
-        optimiseTimer.Interval = 30000;
-        optimiseTimer.Tick += (s, e) => optimiseSchedule();
-        optimiseTimer.Start();
-
-        hardwarePollingTimer = new System.Threading.Timer((e) => {
-          if (isShuttingDown) {
-            return;
-          }
-
-          try {
-            QueryHarware();
-            if (monitorFan)
-              fanSpeedNow = GetFanLevel();
-            ApplySmartPowerControl();
-          } catch (Exception ex) {
-            WriteErrorLog(ex, "hardware polling");
-          }
-        }, null, 100, 1000);
-
-        fanControlTimer = new System.Threading.Timer((e) => {
-          if (isShuttingDown) {
-            return;
-          }
-
-          int fanSpeed1 = FanRpmToRawLevel(fanCurveService.GetFanSpeedForTemperature(CPUTemp, GPUTemp, monitorGPU, 0));
-          int fanSpeed2 = FanRpmToRawLevel(fanCurveService.GetFanSpeedForTemperature(CPUTemp, GPUTemp, monitorGPU, 1));
-          if (monitorFan) {
-            if (fanSpeed1 != fanSpeedNow[0] || fanSpeed2 != fanSpeedNow[1]) {
-              SetFanLevel(fanSpeed1, fanSpeed2);
-            }
-          } else
-            SetFanLevel(fanSpeed1, fanSpeed2);
-        }, null, 100, 1000);
-
-        getOmenKeyTask();
-        checkFloatingTimer = new System.Windows.Forms.Timer();
-        checkFloatingTimer.Interval = 100;
-        checkFloatingTimer.Tick += (s, e) => HandleFloatingBarToggle();
-        checkFloatingTimer.Start();
-
-        RestoreConfig();
-
-        if (alreadyRead != alreadyReadCode) {
-          MainForm.Instance.ShowHelpSection();
-          alreadyRead = alreadyReadCode;
-          SaveConfig("AlreadyRead");
-        }
-
-        SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(OnPowerChange);
-
-        Application.Run();
+    static void HardwarePollingTick() {
+      if (isShuttingDown) {
+        return;
       }
+
+      try {
+        QueryHarware();
+        if (monitorFan)
+          fanSpeedNow = GetFanLevel();
+        ApplySmartPowerControl();
+      } catch (Exception ex) {
+        WriteErrorLog(ex, "hardware polling");
+      }
+    }
+
+    static void FanControlTick() {
+      if (isShuttingDown) {
+        return;
+      }
+
+      int fanSpeed1 = FanRpmToRawLevel(fanCurveService.GetFanSpeedForTemperature(CPUTemp, GPUTemp, monitorGPU, 0));
+      int fanSpeed2 = FanRpmToRawLevel(fanCurveService.GetFanSpeedForTemperature(CPUTemp, GPUTemp, monitorGPU, 1));
+      if (monitorFan) {
+        if (fanSpeed1 != fanSpeedNow[0] || fanSpeed2 != fanSpeedNow[1]) {
+          SetFanLevel(fanSpeed1, fanSpeed2);
+        }
+      } else {
+        SetFanLevel(fanSpeed1, fanSpeed2);
+      }
+    }
+
+    static void HandleFirstRunPrompt() {
+      if (alreadyRead == alreadyReadCode) {
+        return;
+      }
+
+      MainForm.Instance.ShowHelpSection();
+      alreadyRead = alreadyReadCode;
+      SaveConfig("AlreadyRead");
+    }
+
+    void ReleaseSingleInstanceMutex() {
+      if (singleInstanceMutex == null) {
+        if (ReferenceEquals(currentInstance, this)) {
+          currentInstance = null;
+        }
+        return;
+      }
+
+      try {
+        singleInstanceMutex.ReleaseMutex();
+      } catch (ApplicationException) {
+      } finally {
+        singleInstanceMutex.Dispose();
+        singleInstanceMutex = null;
+        if (ReferenceEquals(currentInstance, this)) {
+          currentInstance = null;
+        }
+      }
+    }
+
+    public bool TryStart(string[] args) {
+      bool isNewInstance;
+      singleInstanceMutex = new Mutex(true, "MyUniqueAppMutex", out isNewInstance);
+      if (!isNewInstance) {
+        singleInstanceMutex.Dispose();
+        singleInstanceMutex = null;
+        return false;
+      }
+
+      if (Environment.OSVersion.Version.Major >= 6) {
+        SetProcessDPIAware();
+      }
+
+      AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+      Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
+      Application.ApplicationExit += new EventHandler(OnApplicationExit);
+      currentInstance = this;
+
+      Application.EnableVisualStyles();
+      Application.SetCompatibleTextRenderingDefault(false);
+      MainForm.Initialize(this);
+
+      powerOnline = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
+      Version version = Assembly.GetExecutingAssembly().GetName().Version;
+      string versionString = version.ToString().Replace(".", "");
+      alreadyReadCode = new Random(int.Parse(versionString)).Next(1000, 10000);
+
+      InitTrayIcon();
+
+      libreComputer.Open();
+      StartTimers();
+      getOmenKeyTask();
+      StartFloatingToggleTimer();
+
+      RestoreConfig();
+      HandleFirstRunPrompt();
+
+      SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(OnPowerChange);
+      return true;
+    }
+
+    public void Stop() {
+      ReleaseSingleInstanceMutex();
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
@@ -1205,19 +1241,19 @@ namespace OmenSuperHub {
       omenKey = snapshot.OmenKey;
       switch (omenKey) {
         case "default":
-          checkFloatingTimer.Enabled = false;
+          backgroundScheduler?.SetFloatingToggleEnabled(false);
           OmenKeyOff();
           OmenKeyOn(omenKey);
           UpdateCheckedState("omenKeyGroup", "默认");
           break;
         case "custom":
-          checkFloatingTimer.Enabled = true;
+          backgroundScheduler?.SetFloatingToggleEnabled(true);
           OmenKeyOff();
           OmenKeyOn(omenKey);
           UpdateCheckedState("omenKeyGroup", "切换浮窗显示");
           break;
         case "none":
-          checkFloatingTimer.Enabled = false;
+          backgroundScheduler?.SetFloatingToggleEnabled(false);
           OmenKeyOff();
           UpdateCheckedState("omenKeyGroup", "取消绑定");
           break;
@@ -1389,6 +1425,7 @@ namespace OmenSuperHub {
 
     static void OnApplicationExit(object sender, EventArgs e) {
       if (Interlocked.Exchange(ref shutdownStarted, 1) != 0) {
+        currentInstance?.ReleaseSingleInstanceMutex();
         return;
       }
 
@@ -1399,29 +1436,13 @@ namespace OmenSuperHub {
       shellService.Dispose();
 
       libreComputer.Close();
+      currentInstance?.ReleaseSingleInstanceMutex();
     }
 
     static void StopAndDisposeTimers() {
-      if (hardwarePollingTimer != null) {
-        hardwarePollingTimer.Dispose();
-        hardwarePollingTimer = null;
-      }
-
-      if (checkFloatingTimer != null) {
-        checkFloatingTimer.Stop();
-        checkFloatingTimer.Dispose();
-        checkFloatingTimer = null;
-      }
-
-      if (optimiseTimer != null) {
-        optimiseTimer.Stop();
-        optimiseTimer.Dispose();
-        optimiseTimer = null;
-      }
-
-      if (fanControlTimer != null) {
-        fanControlTimer.Dispose();
-        fanControlTimer = null;
+      if (backgroundScheduler != null) {
+        backgroundScheduler.Dispose();
+        backgroundScheduler = null;
       }
     }
 
@@ -1532,7 +1553,8 @@ namespace OmenSuperHub {
   static class Program {
     [STAThread]
     static void Main(string[] args) {
-      new AppRuntime().Run(args);
+      AppRuntime runtime = new AppRuntime();
+      Application.Run(new AppApplicationContext(runtime, args));
     }
   }
 }

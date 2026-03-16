@@ -199,6 +199,8 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\App\AppApplicationContext.cs" />
+    <Compile Include="src\App\AppBackgroundScheduler.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
     <Compile Include="src\App\IAppController.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />

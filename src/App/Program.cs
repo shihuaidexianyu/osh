@@ -292,6 +292,7 @@ namespace OmenSuperHub {
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly SettingsRestoreService settingsRestoreService = new SettingsRestoreService(settingsService);
+    static readonly AppErrorLogService errorLogService = new AppErrorLogService(AppDomain.CurrentDomain.BaseDirectory);
     static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway);
     static readonly DashboardSnapshotBuilder dashboardSnapshotBuilder = new DashboardSnapshotBuilder();
     static LibreComputer libreComputer = new LibreComputer() { IsCpuEnabled = true, IsGpuEnabled = true };
@@ -367,7 +368,7 @@ namespace OmenSuperHub {
           fanSpeedNow = hardwareControlService.GetFanLevel();
         ApplySmartPowerControl();
       } catch (Exception ex) {
-        WriteErrorLog(ex, "hardware polling");
+        errorLogService.Write(ex, "hardware polling");
       }
     }
 
@@ -822,10 +823,10 @@ namespace OmenSuperHub {
             } else {
               hardwareControlService.SetMaxFanSpeedEnabled(false);
             }
-          }
-        } catch (Exception ex) {
-          WriteErrorLog(ex, "smart power control");
         }
+      } catch (Exception ex) {
+        errorLogService.Write(ex, "smart power control");
+      }
       }
     }
 
@@ -1186,33 +1187,12 @@ namespace OmenSuperHub {
 
     static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e) {
       Exception ex = (Exception)e.ExceptionObject;
-      LogError(ex);
+      errorLogService.ReportFatal(ex, isShuttingDown);
     }
 
     static void Application_ThreadException(object sender, ThreadExceptionEventArgs e) {
       Exception ex = e.Exception;
-      LogError(ex);
-    }
-
-    static void WriteErrorLog(Exception ex, string context = null) {
-      if (ex == null) {
-        return;
-      }
-
-      try {
-        string absoluteFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "error.log");
-        string prefix = string.IsNullOrWhiteSpace(context) ? string.Empty : $"[{context}] ";
-        File.AppendAllText(absoluteFilePath, DateTime.Now + ": " + prefix + ex + Environment.NewLine);
-      } catch {
-      }
-    }
-
-    static void LogError(Exception ex) {
-      WriteErrorLog(ex);
-
-      if (!isShuttingDown) {
-        MessageBox.Show("An unexpected error occurred. Please check the log file for details.");
-      }
+      errorLogService.ReportFatal(ex, isShuttingDown);
     }
 
     DashboardSnapshot IAppController.GetDashboardSnapshot() {

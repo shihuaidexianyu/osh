@@ -269,7 +269,7 @@ namespace OmenSuperHub {
         if (method == "custom") {
           consumer["CommandLineTemplate"] = @"cmd /c echo OmenKeyTriggered > \\.\pipe\OmenSuperHubPipe";
         } else {
-          consumer["CommandLineTemplate"] = @"C:\Windows\System32\schtasks.exe /run /tn ""Omen Key""";
+          consumer["CommandLineTemplate"] = @"cmd /c echo OmenKeyShowMainWindow > \\.\pipe\OmenSuperHubPipe";
         }
         consumer["Name"] = "OmenKeyConsumer";
         consumer.Put();

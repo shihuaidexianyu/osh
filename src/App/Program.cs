@@ -342,6 +342,7 @@ namespace OmenSuperHub {
     static TaskEx omenKeyListenerTask;
     static int shutdownStarted = 0;
     static volatile bool checkFloating = false;
+    static volatile bool checkShowMainWindow = false;
     static volatile bool isShuttingDown = false;
 
     static int ClampFanRpm(int rpm) {
@@ -895,6 +896,11 @@ namespace OmenSuperHub {
         return;
       }
 
+      if (checkShowMainWindow) {
+        checkShowMainWindow = false;
+        ShowMainWindow();
+      }
+
       RefreshShellStatus();
 
       if (countRestore > 0) {
@@ -1149,8 +1155,12 @@ namespace OmenSuperHub {
 
               using (var reader = new StreamReader(pipeServer)) {
                 string message = reader.ReadToEnd();
-                if (!string.IsNullOrEmpty(message) && message.Contains("OmenKeyTriggered")) {
-                  checkFloating = true;
+                if (!string.IsNullOrEmpty(message)) {
+                  if (message.Contains("OmenKeyTriggered")) {
+                    checkFloating = true;
+                  } else if (message.Contains("OmenKeyShowMainWindow")) {
+                    checkShowMainWindow = true;
+                  }
                 }
               }
             }

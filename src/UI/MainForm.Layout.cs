@@ -466,7 +466,7 @@ namespace OmenSuperHub {
       AddControlRow(grid, 2, "OMEN 按键", omenKeyComboBox);
 
       var hint = new TextBlock {
-        Text = "默认：触发系统原有 Omen Key 任务 | 切换浮窗显示：按键直接开关本应用浮窗 | 禁用：不注册任何按键动作",
+        Text = "默认：打开本应用主页面 | 切换浮窗显示：按键直接开关本应用浮窗 | 禁用：不注册任何按键动作",
         Foreground = mutedText,
         FontSize = 12,
         TextWrapping = TextWrapping.Wrap,

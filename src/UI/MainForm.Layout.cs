@@ -144,6 +144,7 @@ namespace OmenSuperHub {
 
     UIElement BuildAdvancedSettingsPage() {
       var content = new StackPanel();
+      content.Children.Add(BuildAppBehaviorPanel());
       content.Children.Add(BuildCoolingPanel());
       content.Children.Add(BuildStrategyTuningPanel());
       return content;
@@ -441,6 +442,42 @@ namespace OmenSuperHub {
 
       root.Children.Add(advancedGrid);
       card.Child = root;
+      return card;
+    }
+
+    Border BuildAppBehaviorPanel() {
+      var card = CreateCard(220);
+      var grid = CreateSettingsGrid();
+      AddTitleToGrid(grid, "应用行为", "设置登录后自动启动，以及按下 OMEN 键时由本应用接管的动作。");
+
+      autoStartCheckBox = new CheckBox {
+        Content = "登录后自动启动 OmenSuperHub",
+        Foreground = strongText,
+        FontSize = 14,
+        Margin = new Thickness(0, 8, 0, 8),
+        VerticalAlignment = VerticalAlignment.Center
+      };
+      autoStartCheckBox.Checked += AutoStartCheckBox_Changed;
+      autoStartCheckBox.Unchecked += AutoStartCheckBox_Changed;
+
+      omenKeyComboBox = CreateComboBox(omenKeyItems, OmenKeyComboBox_SelectionChanged);
+
+      AddControlRow(grid, 1, "自启动", autoStartCheckBox);
+      AddControlRow(grid, 2, "OMEN 按键", omenKeyComboBox);
+
+      var hint = new TextBlock {
+        Text = "默认：触发系统原有 Omen Key 任务 | 切换浮窗显示：按键直接开关本应用浮窗 | 禁用：不注册任何按键动作",
+        Foreground = mutedText,
+        FontSize = 12,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 2, 0, 0)
+      };
+      Grid.SetRow(hint, 3);
+      Grid.SetColumn(hint, 1);
+      grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+      grid.Children.Add(hint);
+
+      card.Child = grid;
       return card;
     }
 

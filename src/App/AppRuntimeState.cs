@@ -19,6 +19,8 @@ namespace OmenSuperHub {
     public string CpuPowerSetting { get; set; }
     public string GpuPowerSetting { get; set; }
     public int GpuClockLimit { get; set; }
+    public bool AutoStartEnabled { get; set; }
+    public string OmenKeyMode { get; set; }
     public bool FloatingBarEnabled { get; set; }
     public string FloatingBarLocation { get; set; }
     public int FloatingBarTextSize { get; set; }

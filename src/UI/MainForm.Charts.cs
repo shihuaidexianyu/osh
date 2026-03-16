@@ -417,6 +417,28 @@ namespace OmenSuperHub {
       return "high";
     }
 
+    string ConvertOmenKeyMode(string value) {
+      switch ((value ?? string.Empty).ToLowerInvariant()) {
+        case "custom":
+          return "切换浮窗显示";
+        case "none":
+          return "禁用";
+        default:
+          return "默认";
+      }
+    }
+
+    string ConvertOmenKeyModeBack(string value) {
+      switch (value) {
+        case "切换浮窗显示":
+          return "custom";
+        case "禁用":
+          return "none";
+        default:
+          return "default";
+      }
+    }
+
     string BuildBatteryState(BatteryTelemetry telemetry) {
       if (telemetry == null) return "Unknown";
       if (telemetry.Discharging) return "Discharging";

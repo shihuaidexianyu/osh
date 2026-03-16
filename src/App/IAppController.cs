@@ -9,6 +9,8 @@ namespace OmenSuperHub {
     void ApplyCpuPowerSetting(string value);
     void ApplyGpuPowerSetting(string value);
     void ApplyGpuClockSetting(int value);
+    void ApplyAutoStartSetting(bool enabled);
+    void ApplyOmenKeySetting(string value);
     void ApplyFloatingBarSetting(bool enabled);
     void ApplyFloatingBarLocationSetting(string location);
     void ApplySmartPowerControlSetting(bool enabled);

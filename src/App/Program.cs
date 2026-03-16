@@ -72,6 +72,14 @@ namespace OmenSuperHub {
       ApplyGpuClock(value, persistConfigName: "GpuClock");
     }
 
+    internal static void ApplyAutoStartSetting(bool enabled) {
+      ApplyAutoStart(enabled, persistConfigName: "AutoStart");
+    }
+
+    internal static void ApplyOmenKeySetting(string value) {
+      ApplyOmenKey(value, persistConfigName: "OmenKey");
+    }
+
     internal static void ApplyFloatingBarSetting(bool enabled) {
       floatingBar = enabled ? "on" : "off";
       RefreshShellStatus();
@@ -171,6 +179,43 @@ namespace OmenSuperHub {
       gpuClock = Math.Max(0, value);
       hardwareControlService.SetGpuClockLimit(gpuClock);
       PersistControlMutation(persistConfigName);
+    }
+
+    static void ApplyAutoStart(bool enabled, string persistConfigName = null) {
+      try {
+        if (enabled) {
+          AutoStartEnable();
+          autoStart = "on";
+        } else {
+          AutoStartDisable();
+          autoStart = "off";
+        }
+      } catch (Exception ex) {
+        errorLogService.Write(ex, "auto start");
+      }
+
+      if (persistConfigName != null) {
+        SaveConfig(persistConfigName);
+      }
+    }
+
+    static void ApplyOmenKey(string value, string persistConfigName = null) {
+      omenKey = NormalizeOmenKey(value);
+      bool enableFloatingToggle = omenKey == "custom";
+      backgroundScheduler?.SetFloatingToggleEnabled(enableFloatingToggle);
+
+      try {
+        hardwareControlService.DisableOmenKey();
+        if (omenKey != "none") {
+          hardwareControlService.EnableOmenKey(omenKey);
+        }
+      } catch (Exception ex) {
+        errorLogService.Write(ex, "omen key");
+      }
+
+      if (persistConfigName != null) {
+        SaveConfig(persistConfigName);
+      }
     }
 
     static void ApplySmartPowerControl(bool enabled, string persistConfigName = null) {
@@ -525,6 +570,17 @@ namespace OmenSuperHub {
           Console.WriteLine("笔记本未连接到电源。");
           powerOnline = false;
         }
+      }
+    }
+
+    static string NormalizeOmenKey(string value) {
+      switch ((value ?? string.Empty).Trim().ToLowerInvariant()) {
+        case "custom":
+          return "custom";
+        case "none":
+          return "none";
+        default:
+          return "default";
       }
     }
 
@@ -901,6 +957,8 @@ namespace OmenSuperHub {
         CpuPowerSetting = cpuPower,
         GpuPowerSetting = gpuPower,
         GpuClockLimit = gpuClock,
+        AutoStartEnabled = autoStart == "on",
+        OmenKeyMode = omenKey,
         FloatingBarEnabled = floatingBar == "on",
         FloatingBarLocation = floatingBarLoc,
         FloatingBarTextSize = textSize,
@@ -1009,14 +1067,10 @@ namespace OmenSuperHub {
         return;
       }
 
-      autoStart = plan.AutoStart;
-      if (plan.EnableAutoStart) {
-        AutoStartEnable();
-      }
-
+      ApplyAutoStart(plan.EnableAutoStart);
       alreadyRead = plan.AlreadyRead;
       customIcon = plan.CustomIcon;
-      ApplyRestoredOmenKey(plan.OmenKey);
+      ApplyOmenKey(plan.OmenKey);
 
       libreComputer.IsGpuEnabled = true;
       monitorGPU = true;
@@ -1027,16 +1081,6 @@ namespace OmenSuperHub {
 
       RefreshShellStatus();
       ApplyCheckedMenuSelections(plan.CheckedMenuSelections);
-    }
-
-    static void ApplyRestoredOmenKey(string value) {
-      omenKey = value;
-      bool enableFloatingToggle = omenKey == "custom";
-      backgroundScheduler?.SetFloatingToggleEnabled(enableFloatingToggle);
-      hardwareControlService.DisableOmenKey();
-      if (omenKey != "none") {
-        hardwareControlService.EnableOmenKey(omenKey);
-      }
     }
 
     static void ApplyCheckedMenuSelections(IEnumerable<CheckedMenuSelection> selections) {
@@ -1216,6 +1260,14 @@ namespace OmenSuperHub {
 
     void IAppController.ApplyGpuClockSetting(int value) {
       ApplyGpuClockSetting(value);
+    }
+
+    void IAppController.ApplyAutoStartSetting(bool enabled) {
+      ApplyAutoStartSetting(enabled);
+    }
+
+    void IAppController.ApplyOmenKeySetting(string value) {
+      ApplyOmenKeySetting(value);
     }
 
     void IAppController.ApplyFloatingBarSetting(bool enabled) {

@@ -88,6 +88,7 @@ namespace OmenSuperHub {
       if (cpuPowerComboBox?.IsDropDownOpen == true) return true;
       if (gpuPowerComboBox?.IsDropDownOpen == true) return true;
       if (gpuClockComboBox?.IsDropDownOpen == true) return true;
+      if (omenKeyComboBox?.IsDropDownOpen == true) return true;
       if (floatingBarLocationComboBox?.IsDropDownOpen == true) return true;
 
       if (manualFanRpmSlider?.IsMouseCaptureWithin == true) return true;
@@ -130,6 +131,10 @@ namespace OmenSuperHub {
         SelectComboItem(cpuPowerComboBox, snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting);
         SelectComboItem(gpuPowerComboBox, ConvertGpuPowerValue(snapshot.GpuPowerSetting));
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
+        if (autoStartCheckBox != null) {
+          autoStartCheckBox.IsChecked = snapshot.AutoStartEnabled;
+        }
+        SelectComboItem(omenKeyComboBox, ConvertOmenKeyMode(snapshot.OmenKeyMode));
         smartPowerControlCheckBox.IsChecked = snapshot.SmartPowerControlEnabled;
         SyncPowerTuningControls();
 
@@ -245,6 +250,9 @@ namespace OmenSuperHub {
         appController.ApplySmartPowerControlSetting(smartPowerControlCheckBox != null && smartPowerControlCheckBox.IsChecked == true);
       }
 
+      appController.ApplyAutoStartSetting(autoStartCheckBox != null && autoStartCheckBox.IsChecked == true);
+      appController.ApplyOmenKeySetting(ConvertOmenKeyModeBack(omenKeyComboBox?.SelectedItem?.ToString() ?? "默认"));
+
       bool floatingEnabled = floatingBarButton != null && floatingBarButton.Tag is bool tagValue && tagValue;
       appController.ApplyFloatingBarSetting(floatingEnabled);
       if (floatingBarLocationComboBox?.SelectedItem != null) {
@@ -329,6 +337,16 @@ namespace OmenSuperHub {
     void GpuClockComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
       if (syncingControlState || gpuClockComboBox.SelectedItem == null) return;
       MarkPendingChanges(setCustomUsageMode: true);
+    }
+
+    void AutoStartCheckBox_Changed(object sender, RoutedEventArgs e) {
+      if (syncingControlState || autoStartCheckBox == null || !autoStartCheckBox.IsChecked.HasValue) return;
+      MarkPendingChanges();
+    }
+
+    void OmenKeyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+      if (syncingControlState || omenKeyComboBox?.SelectedItem == null) return;
+      MarkPendingChanges();
     }
 
     void SmartPowerControlCheckBox_Changed(object sender, RoutedEventArgs e) {

@@ -62,6 +62,7 @@ namespace OmenSuperHub.Tests {
       Assert.AreEqual(36, plan.FloatingBarSize);
       Assert.AreEqual("right", plan.FloatingBarLocation);
       Assert.AreEqual("on", plan.FloatingBar);
+      CollectionAssert.Contains(GetSelectionKeys(plan), "autoStartGroup:开启");
       CollectionAssert.Contains(GetSelectionKeys(plan), "fanControlGroup:3100 RPM");
       CollectionAssert.Contains(GetSelectionKeys(plan), "gpuClockGroup:2400 MHz");
       CollectionAssert.Contains(GetSelectionKeys(plan), "omenKeyGroup:切换浮窗显示");
@@ -76,6 +77,8 @@ namespace OmenSuperHub.Tests {
         CpuTemperature = 81.5f,
         GpuTemperature = 74.2f,
         FanSpeeds = new List<int> { 23, 27 },
+        AutoStartEnabled = true,
+        OmenKeyMode = "custom",
         TemperatureSensors = new List<TemperatureSensorReading> {
           new TemperatureSensorReading { Name = "CPU Package", Celsius = 81.5f }
         },
@@ -95,6 +98,8 @@ namespace OmenSuperHub.Tests {
       state.GpuStatus.RawData[0] = 9;
 
       Assert.AreEqual(23, snapshot.FanSpeeds[0]);
+      Assert.IsTrue(snapshot.AutoStartEnabled);
+      Assert.AreEqual("custom", snapshot.OmenKeyMode);
       Assert.AreEqual(81.5f, snapshot.TemperatureSensors[0].Celsius);
       Assert.AreEqual(1, snapshot.GpuStatus.RawData[0]);
       Assert.AreEqual(45.2f, HardwareTelemetryService.GetBatteryPowerWatts(snapshot.Battery));

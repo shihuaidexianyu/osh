@@ -57,6 +57,7 @@ namespace OmenSuperHub {
     readonly string[] cpuPowerItems = { "最大", "45 W", "55 W", "65 W", "75 W", "90 W" };
     readonly string[] gpuPowerItems = { "高性能", "均衡", "节能" };
     readonly string[] gpuClockItems = { "还原", "1600 MHz", "1800 MHz", "2000 MHz", "2200 MHz", "2400 MHz" };
+    readonly string[] omenKeyItems = { "默认", "切换浮窗显示", "禁用" };
     readonly string[] floatingBarLocationItems = { "左上角", "右上角" };
 
     Window window;
@@ -124,7 +125,9 @@ namespace OmenSuperHub {
     ComboBox cpuPowerComboBox;
     ComboBox gpuPowerComboBox;
     ComboBox gpuClockComboBox;
+    ComboBox omenKeyComboBox;
     ComboBox floatingBarLocationComboBox;
+    CheckBox autoStartCheckBox;
     CheckBox smartPowerControlCheckBox;
     Button floatingBarButton;
 

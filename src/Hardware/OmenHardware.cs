@@ -50,6 +50,8 @@ namespace OmenSuperHub {
       public bool ExtremeModeSupported { get; set; }
       public bool ExtremeModeUnlocked { get; set; }
       public bool GraphicsSwitcherSupported { get; set; }
+      public bool GraphicsHybridModeSupported { get; set; }
+      public bool GraphicsOptimusModeSupported { get; set; }
       public byte[] RawData { get; set; }
     }
   }

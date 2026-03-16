@@ -173,8 +173,8 @@ namespace OmenSuperHub {
     }
 
     static void ApplyGraphicsMode(GraphicsModeOption value, string persistConfigName = null) {
-      graphicsModeSetting = RuntimeControlSettings.ToStorageValue(value);
-      hardwareControlService.ApplyGraphicsMode(value);
+      GraphicsModeOption resolvedValue = hardwareControlService.ApplyGraphicsMode(value);
+      graphicsModeSetting = RuntimeControlSettings.ToStorageValue(resolvedValue);
       PersistControlMutation(persistConfigName);
     }
 
@@ -676,23 +676,29 @@ namespace OmenSuperHub {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
       }
 
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Max))) {
+      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Max))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Max);
       }
 
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Quiet))) {
+      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Quiet))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Quiet);
       }
 
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Balanced))) {
+      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Balanced))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Balanced);
       }
 
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Performance))) {
+      if (current.Matches(CreateResolvedPresetSettings(UsageModePreset.Performance))) {
         return RuntimeControlSettings.ToStorageValue(UsageModePreset.Performance);
       }
 
       return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
+    }
+
+    static RuntimeControlSettings CreateResolvedPresetSettings(UsageModePreset preset) {
+      RuntimeControlSettings settings = RuntimeControlSettings.CreatePreset(preset);
+      settings.GraphicsMode = hardwareControlService.ResolveSupportedGraphicsMode(settings.GraphicsMode);
+      return settings;
     }
 
     static RuntimeControlSettings CreateCurrentControlSettings() {

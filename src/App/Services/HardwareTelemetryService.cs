@@ -581,6 +581,8 @@ namespace OmenSuperHub {
         ExtremeModeSupported = source.ExtremeModeSupported,
         ExtremeModeUnlocked = source.ExtremeModeUnlocked,
         GraphicsSwitcherSupported = source.GraphicsSwitcherSupported,
+        GraphicsHybridModeSupported = source.GraphicsHybridModeSupported,
+        GraphicsOptimusModeSupported = source.GraphicsOptimusModeSupported,
         RawData = source.RawData == null ? null : (byte[])source.RawData.Clone()
       };
     }

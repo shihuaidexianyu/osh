@@ -4,6 +4,12 @@ Bin/
 Obj/
 bin/
 obj/
+**/[Bb]in/
+**/[Oo]bj/
+**/obj_verify/
+**/obj_verify_tests/
+**/verify/
+**/verify_tests/
 .vs/
 .codex-dotnet-home/
 .codex-localappdata/

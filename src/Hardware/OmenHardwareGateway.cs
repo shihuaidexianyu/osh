@@ -94,7 +94,9 @@ namespace OmenSuperHub {
         SoftwareFanControlSupported = (data[4] & 0x01) != 0,
         ExtremeModeSupported = (data[4] & 0x02) != 0,
         ExtremeModeUnlocked = (data[4] & 0x04) != 0,
-        GraphicsSwitcherSupported = (data[7] & 0x08) != 0,
+        GraphicsSwitcherSupported = (data[7] & 0x0C) != 0,
+        GraphicsHybridModeSupported = (data[7] & 0x04) != 0,
+        GraphicsOptimusModeSupported = (data[7] & 0x08) != 0,
         RawData = data
       };
     }

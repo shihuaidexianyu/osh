@@ -46,8 +46,10 @@ namespace OmenSuperHub {
       }
     }
 
-    public void ApplyGraphicsMode(GraphicsModeOption value) {
-      switch (value) {
+    public GraphicsModeOption ApplyGraphicsMode(GraphicsModeOption value) {
+      GraphicsModeOption resolvedValue = ResolveSupportedGraphicsMode(value);
+
+      switch (resolvedValue) {
         case GraphicsModeOption.Discrete:
           hardwareGateway.SetGraphicsMode(OmenGfxMode.Discrete);
           break;
@@ -58,6 +60,29 @@ namespace OmenSuperHub {
           hardwareGateway.SetGraphicsMode(OmenGfxMode.Hybrid);
           break;
       }
+
+      return resolvedValue;
+    }
+
+    public GraphicsModeOption ResolveSupportedGraphicsMode(GraphicsModeOption value) {
+      OmenSystemDesignData systemDesignData = hardwareGateway.GetSystemDesignData();
+      if (systemDesignData == null || !systemDesignData.GraphicsSwitcherSupported) {
+        return value;
+      }
+
+      if (value == GraphicsModeOption.Hybrid &&
+          systemDesignData.GraphicsOptimusModeSupported &&
+          !systemDesignData.GraphicsHybridModeSupported) {
+        return GraphicsModeOption.Optimus;
+      }
+
+      if (value == GraphicsModeOption.Optimus &&
+          systemDesignData.GraphicsHybridModeSupported &&
+          !systemDesignData.GraphicsOptimusModeSupported) {
+        return GraphicsModeOption.Hybrid;
+      }
+
+      return value;
     }
 
     public void SetMaxFanSpeedEnabled(bool enabled) {

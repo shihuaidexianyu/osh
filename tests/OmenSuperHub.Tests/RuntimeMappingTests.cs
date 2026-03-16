@@ -138,12 +138,56 @@ namespace OmenSuperHub.Tests {
       Assert.AreEqual(@"C:\App\\custom.ico".Replace(@"\\", @"\"), status.CustomIconPath);
     }
 
+    [TestMethod]
+    public void HardwareControlService_ApplyGraphicsMode_MapsHybridToOptimusOnOptimusOnlySystems() {
+      var gateway = new FakeHardwareGateway {
+        SystemDesignData = new OmenSystemDesignData {
+          GraphicsSwitcherSupported = true,
+          GraphicsHybridModeSupported = false,
+          GraphicsOptimusModeSupported = true
+        }
+      };
+      var service = new HardwareControlService(gateway, new ProcessCommandService());
+
+      GraphicsModeOption resolved = service.ApplyGraphicsMode(GraphicsModeOption.Hybrid);
+
+      Assert.AreEqual(GraphicsModeOption.Optimus, resolved);
+      Assert.AreEqual(OmenGfxMode.Optimus, gateway.LastGraphicsMode);
+    }
+
     static List<string> GetSelectionKeys(SettingsRestorePlan plan) {
       var keys = new List<string>();
       foreach (CheckedMenuSelection selection in plan.CheckedMenuSelections) {
         keys.Add(selection.Group + ":" + selection.ItemText);
       }
       return keys;
+    }
+
+    sealed class FakeHardwareGateway : IOmenHardwareGateway {
+      public OmenSystemDesignData SystemDesignData { get; set; }
+      public OmenGfxMode LastGraphicsMode { get; private set; } = OmenGfxMode.Unknown;
+
+      public void GetFanCount() { }
+      public List<int> GetFanLevel() { return new List<int> { 0, 0 }; }
+      public byte[] GetFanTable() { return new byte[0]; }
+      public OmenFanTypeInfo GetFanTypeInfo() { return null; }
+      public OmenGfxMode GetGraphicsMode() { return LastGraphicsMode; }
+      public void SetGraphicsMode(OmenGfxMode mode) { LastGraphicsMode = mode; }
+      public OmenGpuStatus GetGpuStatus() { return null; }
+      public OmenSystemDesignData GetSystemDesignData() { return SystemDesignData; }
+      public void SetFanLevel(int fanSpeed1, int fanSpeed2) { }
+      public void SetFanMode(byte mode) { }
+      public void SetMaxGpuPower() { }
+      public void SetMedGpuPower() { }
+      public void SetMinGpuPower() { }
+      public void SetCpuPowerLimit(byte value) { }
+      public void SetMaxFanSpeedOn() { }
+      public void SetMaxFanSpeedOff() { }
+      public OmenKeyboardType GetKeyboardType() { return OmenKeyboardType.Unknown; }
+      public OmenSmartAdapterStatus GetSmartAdapterStatus() { return OmenSmartAdapterStatus.Unknown; }
+      public byte[] SendOmenBiosWmi(uint commandType, byte[] data, int outputSize, uint command = 0x20008) { return null; }
+      public void OmenKeyOff() { }
+      public void OmenKeyOn(string method) { }
     }
   }
 }

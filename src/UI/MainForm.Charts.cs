@@ -403,13 +403,25 @@ namespace OmenSuperHub {
       return "min";
     }
 
-    string ConvertGraphicsModeSetting(string value) {
+    string ConvertGraphicsModeSetting(string value, OmenSystemDesignData systemDesignData = null) {
       switch ((value ?? string.Empty).ToLowerInvariant()) {
         case "discrete":
           return "独显直连";
         case "optimus":
           return "Optimus";
+        case "hybrid":
+          if (systemDesignData != null &&
+              systemDesignData.GraphicsOptimusModeSupported &&
+              !systemDesignData.GraphicsHybridModeSupported) {
+            return "Optimus";
+          }
+          return "混合输出";
         default:
+          if (systemDesignData != null &&
+              systemDesignData.GraphicsOptimusModeSupported &&
+              !systemDesignData.GraphicsHybridModeSupported) {
+            return "Optimus";
+          }
           return "混合输出";
       }
     }

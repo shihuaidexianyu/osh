@@ -130,10 +130,9 @@ namespace OmenSuperHub {
         SelectComboItem(tempSensitivityComboBox, ConvertTempSensitivity(snapshot.TempSensitivity));
         SelectComboItem(cpuPowerComboBox, snapshot.CpuPowerSetting == "max" ? "最大" : snapshot.CpuPowerSetting);
         SelectComboItem(gpuPowerComboBox, ConvertGpuPowerValue(snapshot.GpuPowerSetting));
-        SelectComboItem(graphicsModeComboBox, ConvertGraphicsModeSetting(snapshot.GraphicsModeSetting));
         if (graphicsModeComboBox != null) {
-          bool canSwitchGraphics = snapshot.SystemDesignData != null && snapshot.SystemDesignData.GraphicsSwitcherSupported;
-          graphicsModeComboBox.IsEnabled = canSwitchGraphics;
+          UpdateGraphicsModeOptions(snapshot.SystemDesignData);
+          SelectComboItem(graphicsModeComboBox, ConvertGraphicsModeSetting(snapshot.GraphicsModeSetting, snapshot.SystemDesignData));
         }
         SelectComboItem(gpuClockComboBox, snapshot.GpuClockLimit > 0 ? $"{snapshot.GpuClockLimit} MHz" : "还原");
         smartPowerControlCheckBox.IsChecked = snapshot.SmartPowerControlEnabled;
@@ -161,6 +160,60 @@ namespace OmenSuperHub {
       }
     }
 
+    void UpdateGraphicsModeOptions(OmenSystemDesignData systemDesignData) {
+      if (graphicsModeComboBox == null) {
+        return;
+      }
+
+      string[] nextItems = GetSupportedGraphicsModeItems(systemDesignData);
+      bool sameItems = graphicsModeComboBox.Items.Count == nextItems.Length;
+      if (sameItems) {
+        for (int i = 0; i < nextItems.Length; i++) {
+          if (!Equals(graphicsModeComboBox.Items[i], nextItems[i])) {
+            sameItems = false;
+            break;
+          }
+        }
+      }
+
+      if (!sameItems) {
+        string previousSelection = graphicsModeComboBox.SelectedItem?.ToString();
+        graphicsModeComboBox.Items.Clear();
+        foreach (string item in nextItems) {
+          graphicsModeComboBox.Items.Add(item);
+        }
+        SelectComboItem(graphicsModeComboBox, previousSelection);
+      }
+
+      graphicsModeComboBox.IsEnabled = systemDesignData != null && systemDesignData.GraphicsSwitcherSupported;
+    }
+
+    string[] GetSupportedGraphicsModeItems(OmenSystemDesignData systemDesignData) {
+      if (systemDesignData == null || !systemDesignData.GraphicsSwitcherSupported) {
+        return graphicsModeItems;
+      }
+
+      if (systemDesignData.GraphicsOptimusModeSupported && !systemDesignData.GraphicsHybridModeSupported) {
+        return new[] { "Optimus", "独显直连" };
+      }
+
+      if (systemDesignData.GraphicsHybridModeSupported && !systemDesignData.GraphicsOptimusModeSupported) {
+        return new[] { "混合输出", "独显直连" };
+      }
+
+      return graphicsModeItems;
+    }
+
+    string GetDefaultIntegratedGraphicsSelection() {
+      if (graphicsModeComboBox != null &&
+          graphicsModeComboBox.Items.Contains("Optimus") &&
+          !graphicsModeComboBox.Items.Contains("混合输出")) {
+        return "Optimus";
+      }
+
+      return "混合输出";
+    }
+
     void ApplyUsageModeToControls(string mode) {
       syncingControlState = true;
       try {
@@ -173,7 +226,7 @@ namespace OmenSuperHub {
             SelectComboItem(tempSensitivityComboBox, "低");
             SelectComboItem(cpuPowerComboBox, "45 W");
             SelectComboItem(gpuPowerComboBox, "节能");
-            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(graphicsModeComboBox, GetDefaultIntegratedGraphicsSelection());
             SelectComboItem(gpuClockComboBox, "还原");
             if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
             break;
@@ -185,7 +238,7 @@ namespace OmenSuperHub {
             SelectComboItem(tempSensitivityComboBox, "高");
             SelectComboItem(cpuPowerComboBox, "最大");
             SelectComboItem(gpuPowerComboBox, "高性能");
-            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(graphicsModeComboBox, GetDefaultIntegratedGraphicsSelection());
             SelectComboItem(gpuClockComboBox, "还原");
             if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
             break;
@@ -209,7 +262,7 @@ namespace OmenSuperHub {
             SelectComboItem(tempSensitivityComboBox, "中");
             SelectComboItem(cpuPowerComboBox, "65 W");
             SelectComboItem(gpuPowerComboBox, "均衡");
-            SelectComboItem(graphicsModeComboBox, "混合输出");
+            SelectComboItem(graphicsModeComboBox, GetDefaultIntegratedGraphicsSelection());
             SelectComboItem(gpuClockComboBox, "还原");
             if (smartPowerControlCheckBox != null) smartPowerControlCheckBox.IsChecked = true;
             break;
@@ -249,7 +302,7 @@ namespace OmenSuperHub {
         string cpuPowerSelection = cpuPowerComboBox?.SelectedItem?.ToString() ?? "最大";
         appController.ApplyCpuPowerSetting(cpuPowerSelection == "最大" ? "max" : cpuPowerSelection);
         appController.ApplyGpuPowerSetting(ConvertGpuPowerValueBack(gpuPowerComboBox?.SelectedItem?.ToString() ?? "节能"));
-        appController.ApplyGraphicsModeSetting(ConvertGraphicsModeSettingBack(graphicsModeComboBox?.SelectedItem?.ToString() ?? "混合输出"));
+        appController.ApplyGraphicsModeSetting(ConvertGraphicsModeSettingBack(graphicsModeComboBox?.SelectedItem?.ToString() ?? GetDefaultIntegratedGraphicsSelection()));
 
         string gpuClockSelection = gpuClockComboBox?.SelectedItem?.ToString() ?? "还原";
         appController.ApplyGpuClockSetting(gpuClockSelection == "还原" ? 0 : int.Parse(gpuClockSelection.Replace(" MHz", string.Empty)));

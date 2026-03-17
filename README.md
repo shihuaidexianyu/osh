@@ -183,8 +183,6 @@ OmenSuperHub-windows-x64-release
 - `电池状态`
   - WMI `BatteryStatus` + Windows 电源状态
 
-更细的说明见 [research/sensor.md](research/sensor.md)。
-
 ## 项目结构
 
 项目当前按下面的依赖方向组织：

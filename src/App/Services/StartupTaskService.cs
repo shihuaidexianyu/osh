@@ -4,6 +4,8 @@ using Microsoft.Win32.TaskScheduler;
 
 namespace OmenSuperHub {
   internal sealed class StartupTaskService {
+    const string CurrentTaskName = "osh";
+    const string LegacyTaskName = "OmenSuperHub";
     readonly ProcessCommandService processCommandService;
 
     public StartupTaskService(ProcessCommandService processCommandService) {
@@ -17,9 +19,9 @@ namespace OmenSuperHub {
 
       using (TaskService ts = new TaskService()) {
         TaskDefinition td = ts.NewTask();
-        td.RegistrationInfo.Description = "Start OmenSuperHub with admin rights";
+        td.RegistrationInfo.Description = "Start osh with admin rights";
         td.Principal.RunLevel = TaskRunLevel.Highest;
-        td.Actions.Add(new ExecAction(Path.Combine(currentPath, "OmenSuperHub.exe"), null, null));
+        td.Actions.Add(new ExecAction(Path.Combine(currentPath, "osh.exe"), null, null));
 
         LogonTrigger logonTrigger = new LogonTrigger();
         td.Triggers.Add(logonTrigger);
@@ -29,7 +31,7 @@ namespace OmenSuperHub {
         td.Settings.ExecutionTimeLimit = TimeSpan.Zero;
         td.Settings.AllowHardTerminate = false;
 
-        ts.RootFolder.RegisterTaskDefinition(@"OmenSuperHub", td);
+        ts.RootFolder.RegisterTaskDefinition(CurrentTaskName, td);
         Console.WriteLine("任务已创建。");
       }
 
@@ -38,13 +40,18 @@ namespace OmenSuperHub {
 
     public void DisableAutoStart() {
       using (TaskService ts = new TaskService()) {
-        Microsoft.Win32.TaskScheduler.Task existingTask = ts.FindTask("OmenSuperHub");
+        Microsoft.Win32.TaskScheduler.Task existingTask = ts.FindTask(CurrentTaskName);
 
         if (existingTask != null) {
-          ts.RootFolder.DeleteTask("OmenSuperHub");
+          ts.RootFolder.DeleteTask(CurrentTaskName);
           Console.WriteLine("任务已删除。");
         } else {
           Console.WriteLine("任务不存在，无需删除。");
+        }
+
+        Microsoft.Win32.TaskScheduler.Task legacyTask = ts.FindTask(LegacyTaskName);
+        if (legacyTask != null) {
+          ts.RootFolder.DeleteTask(LegacyTaskName);
         }
       }
     }

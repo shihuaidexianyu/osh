@@ -9,7 +9,7 @@ namespace OmenSuperHub {
       logDirectory = string.IsNullOrWhiteSpace(baseDirectory)
         ? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OmenSuperHub",
+            "osh",
             "logs")
         : baseDirectory;
     }

@@ -14,18 +14,18 @@ namespace OmenSuperHub {
       this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
       menu = new ContextMenuStrip();
-      menu.Items.Add("OmenSuperHub daemon 运行中").Enabled = false;
+      menu.Items.Add("osh daemon 运行中").Enabled = false;
       menu.Items.Add(new ToolStripSeparator());
       menu.Items.Add("退出", null, OnExitClicked);
 
       trayIcon = new NotifyIcon {
-        Text = "OmenSuperHub daemon 运行中",
+        Text = "osh daemon 运行中",
         Icon = LoadTrayIcon(),
         ContextMenuStrip = menu,
         Visible = true
       };
       trayIcon.DoubleClick += OnTrayIconDoubleClick;
-      trayIcon.BalloonTipTitle = "OmenSuperHub";
+      trayIcon.BalloonTipTitle = "osh";
       trayIcon.BalloonTipText = "后台调度已启动，右键托盘图标可退出。";
       trayIcon.ShowBalloonTip(1500);
 
@@ -33,7 +33,7 @@ namespace OmenSuperHub {
     }
 
     void OnTrayIconDoubleClick(object sender, EventArgs e) {
-      trayIcon.ShowBalloonTip(1200, "OmenSuperHub", "后台调度正在运行。", ToolTipIcon.Info);
+      trayIcon.ShowBalloonTip(1200, "osh", "后台调度正在运行。", ToolTipIcon.Info);
     }
 
     void OnExitClicked(object sender, EventArgs e) {

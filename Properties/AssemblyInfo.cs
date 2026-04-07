@@ -13,11 +13,11 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("OmenSuperHub")]
+[assembly: AssemblyTitle("osh")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("OmenSuperHub")]
+[assembly: AssemblyProduct("osh")]
 [assembly: AssemblyCopyright("Copyright © breaded")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

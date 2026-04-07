@@ -41,7 +41,7 @@ namespace OmenSuperHub {
         }
       } catch (Exception ex) {
         errorLog.Write(ex, "cli");
-        Console.WriteLine("执行失败，请查看日志: %LocalAppData%\\OmenSuperHub\\logs\\error.log");
+        Console.WriteLine("执行失败，请查看日志: %LocalAppData%\\osh\\logs\\error.log");
         Console.WriteLine(ex.Message);
         return 1;
       }
@@ -404,7 +404,7 @@ namespace OmenSuperHub {
     }
 
     static void PrintHelp() {
-      Console.WriteLine("OmenSuperHub CLI");
+      Console.WriteLine("osh CLI");
       Console.WriteLine();
       Console.WriteLine("命令:");
       Console.WriteLine("  daemon");
@@ -433,12 +433,12 @@ namespace OmenSuperHub {
       Console.WriteLine("      omen-key <default|custom|none>");
       Console.WriteLine();
       Console.WriteLine("示例:");
-      Console.WriteLine("  OmenSuperHub.exe daemon");
-      Console.WriteLine("  OmenSuperHub.exe status");
-      Console.WriteLine("  OmenSuperHub.exe preset performance");
-      Console.WriteLine("  OmenSuperHub.exe set fan-control \"3200 RPM\"");
-      Console.WriteLine("  OmenSuperHub.exe set cpu-power 65");
-      Console.WriteLine("  OmenSuperHub.exe set smart-power on");
+      Console.WriteLine("  osh.exe daemon");
+      Console.WriteLine("  osh.exe status");
+      Console.WriteLine("  osh.exe preset performance");
+      Console.WriteLine("  osh.exe set fan-control \"3200 RPM\"");
+      Console.WriteLine("  osh.exe set cpu-power 65");
+      Console.WriteLine("  osh.exe set smart-power on");
     }
   }
 }

@@ -53,12 +53,18 @@ namespace OmenSuperHub {
     readonly string configFilePath;
 
     public AppSettingsService(string configFilePath = null) {
-      this.configFilePath = string.IsNullOrWhiteSpace(configFilePath)
-        ? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OmenSuperHub",
-            "settings.json")
-        : configFilePath;
+      if (!string.IsNullOrWhiteSpace(configFilePath)) {
+        this.configFilePath = configFilePath;
+        return;
+      }
+
+      string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+      string currentPath = Path.Combine(localAppData, "osh", "settings.json");
+      string legacyPath = Path.Combine(localAppData, "OmenSuperHub", "settings.json");
+
+      this.configFilePath = File.Exists(currentPath)
+        ? currentPath
+        : (File.Exists(legacyPath) ? legacyPath : currentPath);
     }
 
     public string ConfigFilePath => configFilePath;

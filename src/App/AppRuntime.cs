@@ -24,7 +24,7 @@ namespace OmenSuperHub {
     static readonly HardwareTelemetryService hardwareTelemetryService =
       new HardwareTelemetryService(libreComputer, hardwareGateway, (ex, context) => errorLogService.Write(ex, context));
 
-    static readonly Mutex singleInstanceMutex = new Mutex(false, "OmenSuperHub.CliDaemon");
+    static readonly Mutex singleInstanceMutex = new Mutex(false, "osh.CliDaemon");
 
     static float CPUTemp = 50;
     static float GPUTemp = 40;

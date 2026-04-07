@@ -1,6 +1,6 @@
-# OmenSuperHub (CLI)
+# osh (CLI)
 
-`OmenSuperHub` 现已是一个 **CLI-only** 的 OMEN 硬件控制工具（无可视化界面）。
+`osh` 现已是一个 **CLI-only** 的 OMEN 硬件控制工具（无可视化界面）。
 
 项目目标是：在指定硬件组合上稳定提供风扇、功耗与基础遥测能力，替代日常常用的 OGH 控制路径。
 
@@ -9,7 +9,7 @@
 - 目标机型：`Intel Core i9-13900HX + NVIDIA GeForce RTX 4060 Laptop GPU`
 - 目标平台：`Windows x64`
 - 目标框架：`.NET Framework 4.8`
-- 程序形态：命令行工具（`OmenSuperHub.exe`）
+- 程序形态：命令行工具（`osh.exe`）
 
 ## 功能概览
 
@@ -24,25 +24,25 @@
 
 ### 帮助
 
-`OmenSuperHub.exe help`
+`osh.exe help`
 
 ### 查看状态
 
-`OmenSuperHub.exe status`
+`osh.exe status`
 
 ### 查看配置
 
-`OmenSuperHub.exe config`
+`osh.exe config`
 
 ### 应用预设
 
-`OmenSuperHub.exe preset quiet`
+`osh.exe preset quiet`
 
 可选值：`quiet | balanced | performance | max`
 
 ### 设置单项参数
 
-`OmenSuperHub.exe set <key> <value>`
+`osh.exe set <key> <value>`
 
 常用 key：
 

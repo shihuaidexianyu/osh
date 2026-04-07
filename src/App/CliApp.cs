@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using LibreComputer = LibreHardwareMonitor.Hardware.Computer;
 
 namespace OmenSuperHub {
@@ -19,6 +20,8 @@ namespace OmenSuperHub {
 
         string command = args[0].Trim().ToLowerInvariant();
         switch (command) {
+          case "daemon":
+            return RunDaemon(args);
           case "status":
             return RunStatus();
           case "config":
@@ -70,6 +73,29 @@ namespace OmenSuperHub {
         Console.WriteLine($"传感器数量: {(snapshot.TemperatureSensors == null ? 0 : snapshot.TemperatureSensors.Count)}");
       } finally {
         libre.Close();
+      }
+
+      return 0;
+    }
+
+    static int RunDaemon(string[] args) {
+      using (var runtime = new AppRuntime()) {
+        if (!runtime.TryStart()) {
+          Console.WriteLine("后台调度已在运行。");
+          return 3;
+        }
+
+        Console.WriteLine("后台调度已启动（CLI daemon 模式）。按 Ctrl+C 退出。");
+        using (var exitEvent = new ManualResetEventSlim(false)) {
+          Console.CancelKeyPress += (sender, e) => {
+            e.Cancel = true;
+            exitEvent.Set();
+          };
+
+          exitEvent.Wait();
+        }
+
+        runtime.Stop();
       }
 
       return 0;
@@ -291,6 +317,9 @@ namespace OmenSuperHub {
       Console.WriteLine("OmenSuperHub CLI");
       Console.WriteLine();
       Console.WriteLine("命令:");
+      Console.WriteLine("  daemon");
+      Console.WriteLine("    启动持续后台调度（按 Ctrl+C 退出）");
+      Console.WriteLine();
       Console.WriteLine("  status");
       Console.WriteLine("    读取当前温度/功率/风扇/适配器状态");
       Console.WriteLine();
@@ -314,6 +343,7 @@ namespace OmenSuperHub {
       Console.WriteLine("      omen-key <default|custom|none>");
       Console.WriteLine();
       Console.WriteLine("示例:");
+      Console.WriteLine("  OmenSuperHub.exe daemon");
       Console.WriteLine("  OmenSuperHub.exe status");
       Console.WriteLine("  OmenSuperHub.exe preset performance");
       Console.WriteLine("  OmenSuperHub.exe set fan-control \"3200 RPM\"");

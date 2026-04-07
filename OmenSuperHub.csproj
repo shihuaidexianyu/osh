@@ -106,6 +106,8 @@
   <ItemGroup>
     <Compile Include="src\App\CliApp.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
+    <Compile Include="src\App\AppBackgroundScheduler.cs" />
+    <Compile Include="src\App\AppRuntime.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />
     <Compile Include="src\App\Services\HardwareControlService.cs" />
     <Compile Include="src\App\Services\AppSettingsService.cs" />

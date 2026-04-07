@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading;
 using LibreComputer = LibreHardwareMonitor.Hardware.Computer;
 using WinFormsApp = System.Windows.Forms.Application;
 
@@ -26,6 +27,8 @@ namespace OmenSuperHub {
         switch (command) {
           case "daemon":
             return RunDaemon(args);
+          case "mode":
+            return RunMode(args);
           case "status":
             return RunStatus();
           case "config":
@@ -212,6 +215,127 @@ namespace OmenSuperHub {
       Console.WriteLine($"FloatingBar={snapshot.FloatingBar}");
       Console.WriteLine($"FloatingBarLocation={snapshot.FloatingBarLocation}");
       return 0;
+    }
+
+    static int RunMode(string[] args) {
+      if (args.Length < 2) {
+        Console.WriteLine("用法: mode <q|b|p|m|quiet|balanced|performance|max> [--no-daemon]");
+        return 2;
+      }
+
+      if (!TryParseModePreset(args[1], out UsageModePreset preset)) {
+        Console.WriteLine($"不支持的模式: {args[1]}");
+        Console.WriteLine("可用模式: q|b|p|m|quiet|balanced|performance|max");
+        return 2;
+      }
+
+      string presetValue = RuntimeControlSettings.ToStorageValue(preset);
+      int presetExitCode = RunPreset(new[] { "preset", presetValue });
+      if (presetExitCode != 0) {
+        return presetExitCode;
+      }
+
+      bool ensureDaemon = !HasFlag(args, "--no-daemon");
+      if (!ensureDaemon) {
+        Console.WriteLine("后台调度: 已跳过启动（--no-daemon）");
+        return 0;
+      }
+
+      if (IsDaemonRunning()) {
+        Console.WriteLine("后台调度: 已在运行");
+        return 0;
+      }
+
+      int daemonExitCode = StartDaemonDetached();
+      if (daemonExitCode == 0) {
+        Console.WriteLine("后台调度: 启动中");
+      }
+
+      return daemonExitCode;
+    }
+
+    static bool TryParseModePreset(string value, out UsageModePreset preset) {
+      preset = UsageModePreset.Custom;
+      string normalized = (value ?? string.Empty).Trim().ToLowerInvariant();
+      switch (normalized) {
+        case "q":
+        case "quiet":
+          preset = UsageModePreset.Quiet;
+          return true;
+        case "b":
+        case "balanced":
+          preset = UsageModePreset.Balanced;
+          return true;
+        case "p":
+        case "performance":
+          preset = UsageModePreset.Performance;
+          return true;
+        case "m":
+        case "max":
+          preset = UsageModePreset.Max;
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    static bool HasFlag(string[] args, string flag) {
+      if (args == null || string.IsNullOrWhiteSpace(flag)) {
+        return false;
+      }
+
+      foreach (string arg in args) {
+        if (string.Equals(arg, flag, StringComparison.OrdinalIgnoreCase)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    static bool IsDaemonRunning() {
+      Mutex daemonMutex = null;
+      try {
+        daemonMutex = Mutex.OpenExisting("osh.CliDaemon");
+        return daemonMutex != null;
+      } catch (WaitHandleCannotBeOpenedException) {
+        return false;
+      } catch {
+        return false;
+      } finally {
+        daemonMutex?.Dispose();
+      }
+    }
+
+    static int StartDaemonDetached() {
+      string exePath;
+      try {
+        using (Process current = Process.GetCurrentProcess()) {
+          exePath = current.MainModule?.FileName;
+        }
+      } catch {
+        exePath = null;
+      }
+
+      if (string.IsNullOrWhiteSpace(exePath)) {
+        Console.WriteLine("无法定位当前可执行文件，无法启动后台调度。\n请手动执行: osh.exe daemon");
+        return 1;
+      }
+
+      try {
+        var startInfo = new ProcessStartInfo {
+          FileName = exePath,
+          Arguments = "daemon",
+          UseShellExecute = true,
+          WindowStyle = ProcessWindowStyle.Hidden
+        };
+        Process.Start(startInfo);
+        return 0;
+      } catch (Exception ex) {
+        Console.WriteLine($"后台调度启动失败: {ex.Message}");
+        Console.WriteLine("请手动执行: osh.exe daemon");
+        return 1;
+      }
     }
 
     static int RunPreset(string[] args) {
@@ -410,6 +534,9 @@ namespace OmenSuperHub {
       Console.WriteLine("  daemon");
       Console.WriteLine("    启动持续后台调度（自动提权、隐藏终端、托盘驻留）");
       Console.WriteLine();
+      Console.WriteLine("  mode <q|b|p|m|quiet|balanced|performance|max> [--no-daemon]");
+      Console.WriteLine("    应用预设模式（支持简写），默认自动确保后台调度运行");
+      Console.WriteLine();
       Console.WriteLine("  status");
       Console.WriteLine("    读取当前温度/功率/风扇/适配器状态");
       Console.WriteLine();
@@ -433,6 +560,8 @@ namespace OmenSuperHub {
       Console.WriteLine("      omen-key <default|custom|none>");
       Console.WriteLine();
       Console.WriteLine("示例:");
+      Console.WriteLine("  osh.exe mode p");
+      Console.WriteLine("  osh.exe mode balanced --no-daemon");
       Console.WriteLine("  osh.exe daemon");
       Console.WriteLine("  osh.exe status");
       Console.WriteLine("  osh.exe preset performance");

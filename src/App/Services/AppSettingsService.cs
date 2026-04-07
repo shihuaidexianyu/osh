@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
+using System.Text;
 
 namespace OmenSuperHub {
   [DataContract]
@@ -69,11 +70,9 @@ namespace OmenSuperHub {
       }
 
       try {
-        using (var stream = File.OpenRead(configFilePath)) {
-          var serializer = new DataContractJsonSerializer(typeof(AppSettingsSnapshot));
-          snapshot = NormalizeSnapshot(serializer.ReadObject(stream) as AppSettingsSnapshot);
-          return true;
-        }
+        string json = File.ReadAllText(configFilePath, Encoding.UTF8);
+        snapshot = NormalizeSnapshot(DeserializeSnapshot(json));
+        return true;
       } catch (Exception ex) {
         Console.WriteLine($"Error restoring configuration: {ex.Message}");
         snapshot = new AppSettingsSnapshot();
@@ -138,11 +137,31 @@ namespace OmenSuperHub {
     }
 
     void WriteSnapshot(AppSettingsSnapshot snapshot) {
-      Directory.CreateDirectory(Path.GetDirectoryName(configFilePath));
-      using (var stream = File.Create(configFilePath)) {
-        var serializer = new DataContractJsonSerializer(typeof(AppSettingsSnapshot));
-        serializer.WriteObject(stream, NormalizeSnapshot(snapshot));
+      string directoryPath = Path.GetDirectoryName(configFilePath);
+      if (!string.IsNullOrWhiteSpace(directoryPath)) {
+        Directory.CreateDirectory(directoryPath);
       }
+
+      string json = SerializeSnapshot(NormalizeSnapshot(snapshot));
+      File.WriteAllText(configFilePath, json, Encoding.UTF8);
+    }
+
+    static AppSettingsSnapshot DeserializeSnapshot(string json) {
+      if (string.IsNullOrWhiteSpace(json)) {
+        return new AppSettingsSnapshot();
+      }
+
+      var serializerSettings = new JsonSerializerSettings {
+        MissingMemberHandling = MissingMemberHandling.Ignore,
+        NullValueHandling = NullValueHandling.Ignore,
+        ObjectCreationHandling = ObjectCreationHandling.Replace
+      };
+
+      return JsonConvert.DeserializeObject<AppSettingsSnapshot>(json, serializerSettings) ?? new AppSettingsSnapshot();
+    }
+
+    static string SerializeSnapshot(AppSettingsSnapshot snapshot) {
+      return JsonConvert.SerializeObject(snapshot ?? new AppSettingsSnapshot(), Formatting.None);
     }
 
     static void CopyUserSettings(AppSettingsSnapshot target, AppSettingsSnapshot source) {

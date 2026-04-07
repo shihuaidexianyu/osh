@@ -59,6 +59,10 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(PkgNewtonsoft_Json)\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="HidSharp">
       <HintPath>$(PkgHidSharp)\lib\net35\HidSharp.dll</HintPath>
     </Reference>
@@ -90,6 +94,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
@@ -102,9 +107,11 @@
     <PackageReference Include="System.Buffers" Version="4.5.1" GeneratePathProperty="true" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" GeneratePathProperty="true" />
     <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" GeneratePathProperty="true" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" GeneratePathProperty="true" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\App\CliApp.cs" />
+    <Compile Include="src\App\DaemonTrayContext.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
     <Compile Include="src\App\AppBackgroundScheduler.cs" />
     <Compile Include="src\App\AppRuntime.cs" />

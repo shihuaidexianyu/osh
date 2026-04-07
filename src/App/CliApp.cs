@@ -1,8 +1,12 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
-using System.Threading;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 using LibreComputer = LibreHardwareMonitor.Hardware.Computer;
+using WinFormsApp = System.Windows.Forms.Application;
 
 namespace OmenSuperHub {
   internal static class CliApp {
@@ -79,27 +83,113 @@ namespace OmenSuperHub {
     }
 
     static int RunDaemon(string[] args) {
+      if (!IsProcessElevated()) {
+        return RelaunchDaemonAsAdmin(args);
+      }
+
       using (var runtime = new AppRuntime()) {
         if (!runtime.TryStart()) {
           Console.WriteLine("后台调度已在运行。");
           return 3;
         }
 
-        Console.WriteLine("后台调度已启动（CLI daemon 模式）。按 Ctrl+C 退出。");
-        using (var exitEvent = new ManualResetEventSlim(false)) {
-          Console.CancelKeyPress += (sender, e) => {
-            e.Cancel = true;
-            exitEvent.Set();
-          };
-
-          exitEvent.Wait();
+        HideConsoleWindow();
+        WinFormsApp.EnableVisualStyles();
+        WinFormsApp.SetCompatibleTextRenderingDefault(false);
+        using (var tray = new DaemonTrayContext(runtime)) {
+          WinFormsApp.Run(tray);
         }
-
-        runtime.Stop();
       }
 
       return 0;
     }
+
+    static void HideConsoleWindow() {
+      IntPtr handle = GetConsoleWindow();
+      if (handle != IntPtr.Zero) {
+        ShowWindow(handle, SwHide);
+      }
+    }
+
+    static bool IsProcessElevated() {
+      using (WindowsIdentity identity = WindowsIdentity.GetCurrent()) {
+        var principal = new WindowsPrincipal(identity);
+        return principal.IsInRole(WindowsBuiltInRole.Administrator);
+      }
+    }
+
+    static int RelaunchDaemonAsAdmin(string[] args) {
+      string exePath;
+      try {
+        using (Process current = Process.GetCurrentProcess()) {
+          exePath = current.MainModule?.FileName;
+        }
+      } catch {
+        exePath = null;
+      }
+
+      if (string.IsNullOrWhiteSpace(exePath)) {
+        Console.WriteLine("无法定位当前可执行文件，无法自动请求管理员权限。");
+        return 1;
+      }
+
+      string forwardedArgs = BuildArgumentString(args);
+
+      try {
+        var startInfo = new ProcessStartInfo {
+          FileName = exePath,
+          Arguments = forwardedArgs,
+          UseShellExecute = true,
+          Verb = "runas"
+        };
+
+        Process.Start(startInfo);
+        Console.WriteLine("正在请求管理员权限并重启 daemon...");
+        return 0;
+      } catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) {
+        Console.WriteLine("已取消管理员权限请求，daemon 未启动。");
+        return 4;
+      } catch (Exception ex) {
+        Console.WriteLine($"自动提权失败: {ex.Message}");
+        Console.WriteLine("请右键 PowerShell 选择“以管理员身份运行”，再执行 daemon。");
+        return 1;
+      }
+    }
+
+    static string BuildArgumentString(string[] args) {
+      if (args == null || args.Length == 0) {
+        return "daemon";
+      }
+
+      var parts = new List<string>(args.Length);
+      foreach (string arg in args) {
+        parts.Add(QuoteArgument(arg ?? string.Empty));
+      }
+
+      return string.Join(" ", parts);
+    }
+
+    static string QuoteArgument(string value) {
+      if (string.IsNullOrEmpty(value)) {
+        return "\"\"";
+      }
+
+      bool hasWhitespaceOrQuote = value.IndexOfAny(new[] { ' ', '\t', '"' }) >= 0;
+      if (!hasWhitespaceOrQuote) {
+        return value;
+      }
+
+      string escaped = value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+      return $"\"{escaped}\"";
+    }
+
+    const int SwHide = 0;
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     static int RunConfig() {
       var settings = new AppSettingsService();
@@ -318,7 +408,7 @@ namespace OmenSuperHub {
       Console.WriteLine();
       Console.WriteLine("命令:");
       Console.WriteLine("  daemon");
-      Console.WriteLine("    启动持续后台调度（按 Ctrl+C 退出）");
+      Console.WriteLine("    启动持续后台调度（自动提权、隐藏终端、托盘驻留）");
       Console.WriteLine();
       Console.WriteLine("  status");
       Console.WriteLine("    读取当前温度/功率/风扇/适配器状态");

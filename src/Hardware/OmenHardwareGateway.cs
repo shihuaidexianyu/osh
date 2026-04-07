@@ -9,6 +9,11 @@ namespace OmenSuperHub {
     ManagementObjectSearcher searcher;
     ManagementObject biosMethods;
     readonly object biosLock = new object();
+    DateTime lastAccessDeniedLogUtc = DateTime.MinValue;
+    DateTime lastErrorLogUtc = DateTime.MinValue;
+    string lastErrorMessage = string.Empty;
+
+    static readonly TimeSpan ErrorLogThrottleWindow = TimeSpan.FromSeconds(30);
 
     public void GetFanCount() {
       SendOmenBiosWmi(0x10, new byte[] { 0x00, 0x00, 0x00, 0x00 }, 4);
@@ -220,7 +225,7 @@ namespace OmenSuperHub {
           }
         } catch (Exception ex) {
           ResetBiosSession();
-          Console.WriteLine("Error: " + ex.Message);
+          LogHardwareError(ex);
           return null;
         }
       }
@@ -253,7 +258,7 @@ namespace OmenSuperHub {
           mo.Delete();
         }
       } catch (Exception ex) {
-        Console.WriteLine("Error: " + ex.Message);
+        LogHardwareError(ex);
       }
     }
 
@@ -288,8 +293,44 @@ namespace OmenSuperHub {
         binding["Filter"] = new ManagementPath(@"root\subscription:__EventFilter.Name='OmenKeyFilter'");
         binding.Put();
       } catch (Exception ex) {
-        Console.WriteLine("Error: " + ex.Message);
+        LogHardwareError(ex);
       }
+    }
+
+    void LogHardwareError(Exception ex) {
+      if (ex == null) {
+        return;
+      }
+
+      DateTime nowUtc = DateTime.UtcNow;
+      if (IsAccessDenied(ex)) {
+        if (nowUtc - lastAccessDeniedLogUtc >= ErrorLogThrottleWindow) {
+          Console.WriteLine("Error: 拒绝访问（请使用管理员权限运行，或检查 WMI 命名空间权限）。");
+          lastAccessDeniedLogUtc = nowUtc;
+        }
+        return;
+      }
+
+      string message = ex.Message ?? string.Empty;
+      bool shouldLog =
+        !string.Equals(lastErrorMessage, message, StringComparison.Ordinal) ||
+        nowUtc - lastErrorLogUtc >= ErrorLogThrottleWindow;
+
+      if (shouldLog) {
+        Console.WriteLine("Error: " + message);
+        lastErrorMessage = message;
+        lastErrorLogUtc = nowUtc;
+      }
+    }
+
+    static bool IsAccessDenied(Exception ex) {
+      if (ex is UnauthorizedAccessException) {
+        return true;
+      }
+
+      string message = ex.Message ?? string.Empty;
+      return message.IndexOf("access is denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             message.IndexOf("拒绝访问", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     void ResetBiosSession() {

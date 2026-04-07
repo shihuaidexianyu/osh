@@ -55,13 +55,28 @@ namespace OmenSuperHub {
     }
 
     public bool SetGpuClockLimit(int freq) {
+      return TrySetGpuClockLimit(freq, out _);
+    }
+
+    public bool TrySetGpuClockLimit(int freq, out string errorMessage) {
+      errorMessage = null;
       if (freq < 210) {
         ProcessResult resetResult = processCommandService.Execute("nvidia-smi --reset-gpu-clocks", timeoutMs: 10000);
-        return resetResult.ExitCode == 0;
+        if (resetResult.ExitCode == 0) {
+          return true;
+        }
+
+        errorMessage = string.IsNullOrWhiteSpace(resetResult.Error) ? "nvidia-smi reset failed." : resetResult.Error.Trim();
+        return false;
       }
 
       ProcessResult lockResult = processCommandService.Execute("nvidia-smi --lock-gpu-clocks=0," + freq, timeoutMs: 10000);
-      return lockResult.ExitCode == 0;
+      if (lockResult.ExitCode == 0) {
+        return true;
+      }
+
+      errorMessage = string.IsNullOrWhiteSpace(lockResult.Error) ? "nvidia-smi lock failed." : lockResult.Error.Trim();
+      return false;
     }
 
     public void SendResumeProbe() {

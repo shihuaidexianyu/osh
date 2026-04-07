@@ -9,7 +9,6 @@ namespace OmenSuperHub {
   internal sealed class AppRuntime : IDisposable {
     static readonly IOmenHardwareGateway hardwareGateway = new OmenHardwareGateway();
     static readonly ProcessCommandService processCommandService = new ProcessCommandService();
-    static readonly StartupTaskService startupTaskService = new StartupTaskService(processCommandService);
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly AppErrorLogService errorLogService = new AppErrorLogService();
@@ -377,12 +376,6 @@ namespace OmenSuperHub {
         return;
       }
 
-      try {
-        ApplyAutoStart(snapshot.AutoStart == "on");
-      } catch (Exception ex) {
-        errorLogService.Write(ex, "restore auto start");
-      }
-
       ApplyControlSettings(RuntimeControlSettings.FromSnapshot(snapshot));
       monitorGPU = true;
       monitorFan = snapshot.MonitorFan;
@@ -465,14 +458,6 @@ namespace OmenSuperHub {
       bool applied = hardwareControlService.SetGpuClockLimit(gpuClock);
       if (!applied) {
         errorLogService.Write(new InvalidOperationException("Failed to apply GPU clock limit."), "gpu clock");
-      }
-    }
-
-    static void ApplyAutoStart(bool enabled) {
-      if (enabled) {
-        startupTaskService.EnableAutoStart(AppDomain.CurrentDomain.BaseDirectory);
-      } else {
-        startupTaskService.DisableAutoStart();
       }
     }
 

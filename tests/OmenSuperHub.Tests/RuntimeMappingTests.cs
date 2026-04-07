@@ -55,7 +55,6 @@ namespace OmenSuperHub.Tests {
         Assert.AreEqual("75 W", snapshot.CpuPower);
         Assert.AreEqual("max", snapshot.GpuPower);
         Assert.AreEqual(2400, snapshot.GpuClock);
-        Assert.AreEqual("on", snapshot.AutoStart);
         Assert.AreEqual("custom", snapshot.OmenKey);
         Assert.IsFalse(snapshot.MonitorFan);
         Assert.IsFalse(snapshot.SmartPowerControlEnabled);

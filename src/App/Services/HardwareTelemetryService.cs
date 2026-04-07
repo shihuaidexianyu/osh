@@ -82,9 +82,16 @@ namespace OmenSuperHub {
       this.logError = logError;
     }
 
+    public void RefreshImmediately() {
+      RefreshTemperatureSensorsSnapshot();
+      RefreshAdvancedHardwareStatus();
+      temperatureSensorRefreshTick = 2;
+      advancedStatusTick = 4;
+    }
+
     public HardwareTelemetrySnapshot Poll(HardwareTelemetryRequest request) {
       float libreTempCPU = -300f;
-      float tempCPU = 50f;
+      float tempCPU = request.CurrentCpuTemperature;
       float librePowerCPU = -1f;
       int bestGpuTempScore = int.MinValue;
       int bestGpuPowerScore = int.MinValue;
@@ -139,7 +146,7 @@ namespace OmenSuperHub {
         if (gpuPowerFound) {
           nextGpuPower = (int)(bestGpuPower * 10) == 5900 ? 0f : Math.Max(0f, bestGpuPower);
         } else {
-          nextGpuPower = 0f;
+          nextGpuPower = request.CurrentGpuPowerWatts;
         }
       }
 

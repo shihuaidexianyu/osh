@@ -16,7 +16,7 @@
 - 查询当前状态：温度/功耗/风扇/适配器/键盘类型等
 - 查看当前配置：读取 `%LocalAppData%\OmenSuperHub\settings.json`
 - 一键应用预设：`quiet / balanced / performance / max`
-- 单项设置覆盖：风扇模式、风扇控制、风扇曲线、CPU/GPU 功率、GPU 锁频、自启动、OMEN 键行为
+- 单项设置覆盖：风扇模式、风扇控制、风扇曲线、CPU/GPU 功率、GPU 锁频、OMEN 键行为
 
 ## 命令用法
 
@@ -46,15 +46,14 @@
 
 常用 key：
 
-- `fan-mode`：`quiet|balanced|performance`
+- `fan-mode`：`default|performance`
 - `fan-control`：`auto|max|<RPM>`（如 `3300`）
-- `fan-table`：`silent|default|performance|cool`
-- `temp-sensitivity`：`realtime|low|normal|high`
+- `fan-table`：`silent|cool`
+- `temp-sensitivity`：`realtime|low|medium|normal|high`
 - `cpu-power`：如 `90` 或 `max`
 - `gpu-power`：`min|med|max`
-- `gpu-clock`：如 `2100`
+- `gpu-clock`：`0` 或不小于 `210`
 - `smart-power`：`on|off`
-- `auto-start`：`on|off`
 - `omen-key`：`default|custom|none`
 
 ## 配置与日志
@@ -85,12 +84,8 @@ dotnet test tests/OmenSuperHub.Tests/OmenSuperHub.Tests.csproj -c Debug -p:Platf
 ## 运行注意事项
 
 - 建议不要与 `OMEN Gaming Hub` 同时控制同一硬件接口。
-- 某些功能依赖管理员权限/WMI/计划任务能力，系统策略可能影响表现。
+- 某些功能依赖管理员权限/WMI，系统策略可能影响表现。
 - 这是面向特定硬件组合的工具，不是通用 OMEN SDK。
-
-## 维护文档
-
-维护与代码落点说明见：`docs/MAINTAINING.md`
 
 ## 来源与致谢
 

@@ -26,8 +26,6 @@ namespace OmenSuperHub {
     [DataMember]
     public int GpuClock { get; set; }
     [DataMember]
-    public string AutoStart { get; set; } = "off";
-    [DataMember]
     public string OmenKey { get; set; } = "default";
     [DataMember]
     public bool MonitorFan { get; set; } = true;
@@ -76,17 +74,21 @@ namespace OmenSuperHub {
       }
     }
 
-    public void SaveConfig(AppSettingsSnapshot snapshot) {
+    public bool TrySaveConfig(AppSettingsSnapshot snapshot, out string errorMessage) {
+      errorMessage = null;
       if (snapshot == null) {
-        return;
+        errorMessage = "配置内容为空。";
+        return false;
       }
 
       try {
         AppSettingsSnapshot document = ReadSnapshotOrDefault();
         CopyUserSettings(document, snapshot);
         WriteSnapshot(document);
+        return true;
       } catch (Exception ex) {
-        Console.WriteLine($"Error saving configuration: {ex.Message}");
+        errorMessage = ex.Message;
+        return false;
       }
     }
 
@@ -155,7 +157,6 @@ namespace OmenSuperHub {
       target.CpuPower = source.CpuPower;
       target.GpuPower = source.GpuPower;
       target.GpuClock = source.GpuClock;
-      target.AutoStart = source.AutoStart;
       target.OmenKey = source.OmenKey;
       target.MonitorFan = source.MonitorFan;
       target.SmartPowerControlEnabled = source.SmartPowerControlEnabled;
@@ -175,7 +176,6 @@ namespace OmenSuperHub {
         RuntimeControlSettings.ParseCpuPowerWatts(snapshot.CpuPower));
       snapshot.GpuPower = RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseGpuPower(snapshot.GpuPower));
       snapshot.GpuClock = Math.Max(0, snapshot.GpuClock);
-      snapshot.AutoStart = snapshot.AutoStart == "on" ? "on" : "off";
       snapshot.OmenKey = NormalizeOmenKey(snapshot.OmenKey);
       snapshot.PowerControlTuning = snapshot.PowerControlTuning == null
         ? PowerController.CreateDefaultTuning()

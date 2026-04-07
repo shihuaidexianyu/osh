@@ -112,6 +112,7 @@
     <Compile Include="src\App\Services\DashboardSnapshotBuilder.cs" />
     <Compile Include="src\App\Services\AppSettingsService.cs" />
     <Compile Include="src\App\Services\AppErrorLogService.cs" />
+    <Compile Include="src\App\Services\StartupTaskService.cs" />
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />
     <Compile Include="src\App\Services\AppShellService.cs" />

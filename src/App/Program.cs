@@ -67,6 +67,7 @@ namespace OmenSuperHub {
     static readonly object temperatureSensorsLock = new object();
     static readonly PowerController powerController = new PowerController();
     static readonly ProcessCommandService processCommandService = new ProcessCommandService();
+    static readonly StartupTaskService startupTaskService = new StartupTaskService(processCommandService);
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
     static readonly SettingsRestoreService settingsRestoreService = new SettingsRestoreService(settingsService);
@@ -249,72 +250,6 @@ namespace OmenSuperHub {
         default:
           return "default";
       }
-    }
-
-    static void AutoStartEnable() {
-      string currentPath = AppDomain.CurrentDomain.BaseDirectory;
-
-      using (TaskService ts = new TaskService()) {
-        TaskDefinition td = ts.NewTask();
-        td.RegistrationInfo.Description = "Start OmenSuperHub with admin rights";
-        td.Principal.RunLevel = TaskRunLevel.Highest;
-        td.Actions.Add(new ExecAction(Path.Combine(currentPath, "OmenSuperHub.exe"), null, null));
-
-        LogonTrigger logonTrigger = new LogonTrigger();
-        td.Triggers.Add(logonTrigger);
-
-        td.Settings.DisallowStartIfOnBatteries = false;
-        td.Settings.StopIfGoingOnBatteries = false;
-        td.Settings.ExecutionTimeLimit = TimeSpan.Zero;
-        td.Settings.AllowHardTerminate = false;
-
-        ts.RootFolder.RegisterTaskDefinition(@"OmenSuperHub", td);
-        Console.WriteLine("任务已创建。");
-      }
-
-      CleanUpAndRemoveTasks();
-    }
-
-    static void AutoStartDisable() {
-      using (TaskService ts = new TaskService()) {
-        Microsoft.Win32.TaskScheduler.Task existingTask = ts.FindTask("OmenSuperHub");
-
-        if (existingTask != null) {
-          ts.RootFolder.DeleteTask("OmenSuperHub");
-          Console.WriteLine("任务已删除。");
-        } else {
-          Console.WriteLine("任务不存在，无需删除。");
-        }
-      }
-    }
-
-    public static void CleanUpAndRemoveTasks() {
-      string targetFolder = @"C:\Program Files\OmenSuperHub";
-      string taskName = "Omen Boot";
-
-      if (Directory.Exists(targetFolder)) {
-        string command = $"rd /s /q \"{targetFolder}\"";
-        var result = ExecuteCommand(command);
-        Console.WriteLine(result.Output);
-      } else {
-        Console.WriteLine("旧文件夹不存在");
-      }
-
-      string taskQueryCommand = $"schtasks /query /tn \"{taskName}\"";
-      var taskQueryResult = ExecuteCommand(taskQueryCommand);
-      if (taskQueryResult.ExitCode == 0) {
-        string deleteTaskCommand = $"schtasks /delete /tn \"{taskName}\" /f";
-        var deleteTaskResult = ExecuteCommand(deleteTaskCommand);
-        Console.WriteLine("已成功删除计划任务 \"Omen Boot\"。");
-        Console.WriteLine(deleteTaskResult.Output);
-      } else {
-        Console.WriteLine($"计划任务 \"{taskName}\" 不存在。");
-      }
-
-      string regDeleteCommand = @"reg delete ""HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"" /v ""OmenSuperHub"" /f";
-      var regDeleteResult = ExecuteCommand(regDeleteCommand);
-      Console.WriteLine("成功取消开机自启");
-      Console.WriteLine(regDeleteResult.Output);
     }
 
     static void InitTrayIcon() {
@@ -527,10 +462,6 @@ namespace OmenSuperHub {
       }
       MessageBox.Show("不存在自定义图标custom.ico", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
       return false;
-    }
-
-    static ProcessResult ExecuteCommand(string command) {
-      return processCommandService.Execute(command);
     }
 
     static void UpdateCheckedState(string group, string itemText = null, ToolStripMenuItem menuItemToCheck = null) {

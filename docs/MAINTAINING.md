@@ -51,6 +51,29 @@ Keep dependencies flowing in this order:
 
 If a UI change only affects one of these concerns, keep the edit in that file.
 
+## AppRuntime split
+
+`AppRuntime` is now intentionally split into partial files under `src/App`:
+
+- `Program.cs`
+  - Core runtime fields, polling/control loop internals, and interface wiring
+- `AppRuntime.ControlApply.cs`
+  - All `Apply*` control mutation paths and persistence trigger points
+- `AppRuntime.StatePersistence.cs`
+  - Runtime snapshot projection and settings restore/save flows
+- `AppRuntime.Lifecycle.cs`
+  - Startup, single-instance guard, pipe listener, shutdown, and fatal exception hooks
+
+When changing runtime behavior, prefer editing the most specific partial file first.
+
+## Startup task management
+
+Windows startup task and legacy startup artifact cleanup are encapsulated in:
+
+- `src/App/Services/StartupTaskService.cs`
+
+If your change only affects scheduled-task registration, privilege level, or legacy cleanup commands, edit this service rather than `AppRuntime`.
+
 ## Guardrails
 
 - Do not call BIOS/WMI code directly from `UI`.

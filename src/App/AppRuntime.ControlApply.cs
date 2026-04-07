@@ -163,10 +163,10 @@ namespace OmenSuperHub {
     static void ApplyAutoStart(bool enabled, string persistConfigName = null) {
       try {
         if (enabled) {
-          AutoStartEnable();
+          startupTaskService.EnableAutoStart(AppDomain.CurrentDomain.BaseDirectory);
           autoStart = "on";
         } else {
-          AutoStartDisable();
+          startupTaskService.DisableAutoStart();
           autoStart = "off";
         }
       } catch (Exception ex) {

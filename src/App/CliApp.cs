@@ -122,6 +122,10 @@ namespace OmenSuperHub {
     }
 
     static int RelaunchDaemonAsAdmin(string[] args) {
+      return RelaunchAsAdmin(args, "正在请求管理员权限并重启 daemon...");
+    }
+
+    static int RelaunchAsAdmin(string[] args, string successMessage) {
       string exePath;
       try {
         using (Process current = Process.GetCurrentProcess()) {
@@ -147,14 +151,16 @@ namespace OmenSuperHub {
         };
 
         Process.Start(startInfo);
-        Console.WriteLine("正在请求管理员权限并重启 daemon...");
+        if (!string.IsNullOrWhiteSpace(successMessage)) {
+          Console.WriteLine(successMessage);
+        }
         return 0;
       } catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) {
-        Console.WriteLine("已取消管理员权限请求，daemon 未启动。");
+        Console.WriteLine("已取消管理员权限请求。操作未执行。");
         return 4;
       } catch (Exception ex) {
         Console.WriteLine($"自动提权失败: {ex.Message}");
-        Console.WriteLine("请右键 PowerShell 选择“以管理员身份运行”，再执行 daemon。");
+        Console.WriteLine("请右键 PowerShell 选择“以管理员身份运行”后重试。 ");
         return 1;
       }
     }
@@ -223,6 +229,11 @@ namespace OmenSuperHub {
         return 2;
       }
 
+      bool ensureDaemon = !HasFlag(args, "--no-daemon");
+      if (ensureDaemon && !IsProcessElevated()) {
+        return RelaunchAsAdmin(args, "正在请求管理员权限并执行 mode...");
+      }
+
       if (!TryParseModePreset(args[1], out UsageModePreset preset)) {
         Console.WriteLine($"不支持的模式: {args[1]}");
         Console.WriteLine("可用模式: q|b|p|m|quiet|balanced|performance|max");
@@ -235,7 +246,6 @@ namespace OmenSuperHub {
         return presetExitCode;
       }
 
-      bool ensureDaemon = !HasFlag(args, "--no-daemon");
       if (!ensureDaemon) {
         Console.WriteLine("后台调度: 已跳过启动（--no-daemon）");
         return 0;

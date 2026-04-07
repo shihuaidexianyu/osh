@@ -107,41 +107,6 @@ namespace OmenSuperHub.Tests {
     }
 
     [TestMethod]
-    public void ShellStatusBuilder_Build_UsesBatteryPowerAndFloatingSummary() {
-      var builder = new ShellStatusBuilder();
-      var state = new AppRuntimeState {
-        CpuTemperature = 82f,
-        CpuPowerWatts = 48f,
-        GpuTemperature = 71f,
-        GpuPowerWatts = 62f,
-        MonitorGpu = true,
-        MonitorFan = true,
-        FanSpeeds = new List<int> { 23, 27 },
-        AcOnline = false,
-        FloatingBarEnabled = true,
-        FloatingBarLocation = "right",
-        FloatingBarTextSize = 36,
-        CustomIconMode = "dynamic",
-        GraphicsMode = OmenGfxMode.Discrete,
-        Battery = new BatteryTelemetry {
-          Discharging = true,
-          DischargeRateMilliwatts = 58600
-        }
-      };
-
-      AppShellStatus status = builder.Build(state, @"C:\App", mainWindowVisible: false);
-
-      StringAssert.Contains(status.TrayText, "BAT 59W");
-      StringAssert.Contains(status.TrayText, "Discrete");
-      StringAssert.Contains(status.FloatingText, "SYS: 58.6W (BAT)");
-      StringAssert.Contains(status.FloatingText, "FAN: 2300/2700 RPM");
-      Assert.IsTrue(status.FloatingVisible);
-      Assert.AreEqual("right", status.FloatingLocation);
-      Assert.AreEqual(36, status.FloatingTextSize);
-      Assert.AreEqual(@"C:\App\\custom.ico".Replace(@"\\", @"\"), status.CustomIconPath);
-    }
-
-    [TestMethod]
     public void FanCurveService_LoadConfig_SavesProfileIntoSingleSettingsFile() {
       string tempDir = Path.Combine(Path.GetTempPath(), "OmenSuperHub.Tests", Path.GetRandomFileName());
       string configPath = Path.Combine(tempDir, "settings.json");

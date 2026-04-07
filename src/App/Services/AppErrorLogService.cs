@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Windows.Forms;
 
 namespace OmenSuperHub {
   internal sealed class AppErrorLogService {
@@ -33,7 +32,7 @@ namespace OmenSuperHub {
       Write(ex);
 
       if (!isShuttingDown) {
-        MessageBox.Show("An unexpected error occurred. Please check the log file for details.");
+        Console.WriteLine("An unexpected error occurred. Please check the log file for details.");
       }
     }
   }

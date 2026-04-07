@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Windows.Forms;
 
 namespace OmenSuperHub {
   [DataContract]
@@ -85,7 +84,7 @@ namespace OmenSuperHub {
 
       int numberOfFans = fanTableBytes[0];
       if (numberOfFans != 2) {
-        MessageBox.Show("本机型不受支持！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        Console.WriteLine("本机型不受支持！");
         GenerateDefaultMapping();
         return;
       }

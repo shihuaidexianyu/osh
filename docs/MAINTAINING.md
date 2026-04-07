@@ -1,4 +1,4 @@
-# OmenSuperHub Maintenance Map
+# OmenSuperHub Maintenance Map (CLI)
 
 This project is organized for low-risk iterative changes, especially when the next editor is an AI assistant.
 
@@ -6,14 +6,12 @@ This project is organized for low-risk iterative changes, especially when the ne
 
 Keep dependencies flowing in this order:
 
-`UI -> App -> Services -> Hardware`
+`CLI -> App -> Services -> Hardware`
 
-- `src/UI`
-  - Window composition, control syncing, charts, and user interactions.
 - `src/App`
-  - Runtime orchestration, lifecycle, background scheduling, and strongly typed control settings.
+  - CLI command entry, command orchestration, and strongly typed control settings.
 - `src/App/Services`
-  - Snapshot building, config restore, shell updates, telemetry, and hardware control semantics.
+  - Config restore, telemetry, startup task management, and hardware control semantics.
 - `src/Hardware`
   - BIOS/WMI access and hardware model types.
 - `src/Core`
@@ -36,39 +34,23 @@ Keep dependencies flowing in this order:
 - Change hardware polling/telemetry interpretation:
   - Start in `src/App/Services/HardwareTelemetryService.cs`
 
-## MainForm split
+## CLI entry
 
-`MainForm` is intentionally split into partial files:
+The executable is now CLI-only. Main entry and command dispatch are in:
 
-- `src/UI/MainForm.cs`
-  - Singleton access, window lifetime, and core fields
-- `src/UI/MainForm.Layout.cs`
-  - Visual tree construction and reusable control builders
-- `src/UI/MainForm.Interaction.cs`
-  - Dashboard refresh, control syncing, and event handlers
-- `src/UI/MainForm.Charts.cs`
-  - Chart drawing plus formatting helpers for telemetry display
+- `src/App/Program.cs`
+- `src/App/CliApp.cs`
 
-If a UI change only affects one of these concerns, keep the edit in that file.
+Primary command groups currently include:
 
-## AppRuntime split
+- `status`
+- `config`
+- `preset`
+- `set`
 
-`AppRuntime` is now intentionally split into partial files under `src/App`:
+## Runtime note
 
-- `Program.cs`
-  - Core runtime fields, polling/control loop internals, and interface wiring
-- `AppRuntime.ControlApply.cs`
-  - All `Apply*` control mutation paths and persistence trigger points
-- `AppRuntime.StatePersistence.cs`
-  - Runtime snapshot projection and settings restore/save flows
-- `AppRuntime.Lifecycle.cs`
-  - Startup, single-instance guard, pipe listener, shutdown, and fatal exception hooks
-- `AppRuntime.ControlLoop.cs`
-  - Hardware polling, fan control loop, power-event handling, and smart power control execution
-- `AppRuntime.ShellBridge.cs`
-  - Tray/floating UI bridge methods and shell interaction callbacks
-
-When changing runtime behavior, prefer editing the most specific partial file first.
+Legacy GUI runtime (`AppRuntime` and `src/UI`) is removed from project build. Maintenance should target `CliApp` and services.
 
 ## Startup task management
 
@@ -80,7 +62,7 @@ If your change only affects scheduled-task registration, privilege level, or leg
 
 ## Guardrails
 
-- Do not call BIOS/WMI code directly from `UI`.
+- Do not call BIOS/WMI code directly from CLI argument parsing; route through services.
 - Prefer extending `RuntimeControlSettings` instead of adding new free-form setting strings.
 - If a change only affects config-to-UI mapping, prefer editing `SettingsRestoreService` over `Program.cs`.
 - If a change only affects snapshot projection, prefer editing a builder over adding more logic to `AppRuntime`.

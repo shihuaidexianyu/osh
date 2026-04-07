@@ -66,8 +66,6 @@
     <Reference Include="Microsoft.Win32.TaskScheduler">
       <HintPath>$(PkgTaskScheduler)\lib\net48\Microsoft.Win32.TaskScheduler.dll</HintPath>
     </Reference>
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Configuration.Install" />
@@ -96,13 +94,8 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Windows.Forms.DataVisualization" />
-    <Reference Include="System.Xaml" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
-    <Reference Include="WindowsBase" />
-    <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
@@ -116,17 +109,9 @@
     <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" GeneratePathProperty="true" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="src\App\AppApplicationContext.cs" />
     <Compile Include="src\App\CliApp.cs" />
-    <Compile Include="src\App\AppRuntime.ControlApply.cs" />
-    <Compile Include="src\App\AppRuntime.ControlLoop.cs" />
-    <Compile Include="src\App\AppRuntime.Lifecycle.cs" />
-    <Compile Include="src\App\AppRuntime.ShellBridge.cs" />
-    <Compile Include="src\App\AppRuntime.StatePersistence.cs" />
-    <Compile Include="src\App\AppBackgroundScheduler.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
     <Compile Include="src\App\AppRuntimeState.cs" />
-    <Compile Include="src\App\IAppController.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />
     <Compile Include="src\App\Services\HardwareControlService.cs" />
     <Compile Include="src\App\Services\DashboardSnapshotBuilder.cs" />
@@ -135,26 +120,9 @@
     <Compile Include="src\App\Services\StartupTaskService.cs" />
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />
-    <Compile Include="src\App\Services\AppShellService.cs" />
-    <Compile Include="src\App\Services\ShellStatusBuilder.cs" />
     <Compile Include="src\App\Services\SettingsRestoreService.cs" />
     <Compile Include="src\Hardware\IOmenHardwareGateway.cs" />
     <Compile Include="src\Hardware\OmenHardwareGateway.cs" />
-    <Compile Include="src\UI\FloatingForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="src\UI\MainForm.Layout.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="src\UI\MainForm.Interaction.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="src\UI\MainForm.Charts.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="src\UI\MainForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="src\Core\Control\PowerController.cs" />
     <Compile Include="src\Hardware\OmenHardware.cs" />
     <Compile Include="src\Core\Models\DashboardModels.cs" />

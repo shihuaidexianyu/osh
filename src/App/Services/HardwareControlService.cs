@@ -56,12 +56,12 @@ namespace OmenSuperHub {
 
     public bool SetGpuClockLimit(int freq) {
       if (freq < 210) {
-        processCommandService.Execute("nvidia-smi --reset-gpu-clocks");
-        return false;
+        ProcessResult resetResult = processCommandService.Execute("nvidia-smi --reset-gpu-clocks", timeoutMs: 10000);
+        return resetResult.ExitCode == 0;
       }
 
-      processCommandService.Execute("nvidia-smi --lock-gpu-clocks=0," + freq);
-      return true;
+      ProcessResult lockResult = processCommandService.Execute("nvidia-smi --lock-gpu-clocks=0," + freq, timeoutMs: 10000);
+      return lockResult.ExitCode == 0;
     }
 
     public void SendResumeProbe() {

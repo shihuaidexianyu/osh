@@ -4,11 +4,14 @@ using System.Windows.Forms;
 
 namespace OmenSuperHub {
   internal sealed class AppErrorLogService {
-    readonly string baseDirectory;
+    readonly string logDirectory;
 
-    public AppErrorLogService(string baseDirectory) {
-      this.baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
-        ? AppDomain.CurrentDomain.BaseDirectory
+    public AppErrorLogService(string baseDirectory = null) {
+      logDirectory = string.IsNullOrWhiteSpace(baseDirectory)
+        ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OmenSuperHub",
+            "logs")
         : baseDirectory;
     }
 
@@ -18,7 +21,8 @@ namespace OmenSuperHub {
       }
 
       try {
-        string absoluteFilePath = Path.Combine(baseDirectory, "error.log");
+        Directory.CreateDirectory(logDirectory);
+        string absoluteFilePath = Path.Combine(logDirectory, "error.log");
         string prefix = string.IsNullOrWhiteSpace(context) ? string.Empty : $"[{context}] ";
         File.AppendAllText(absoluteFilePath, DateTime.Now + ": " + prefix + ex + Environment.NewLine);
       } catch {

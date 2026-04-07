@@ -4,6 +4,7 @@ using System.Linq;
 using System.Management;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Concurrent;
 using LibreComputer = LibreHardwareMonitor.Hardware.Computer;
 using LibreIHardware = LibreHardwareMonitor.Hardware.IHardware;
 using LibreHardwareType = LibreHardwareMonitor.Hardware.HardwareType;
@@ -41,6 +42,8 @@ namespace OmenSuperHub {
     // Intel CPU + NVIDIA dGPU.
     readonly LibreComputer libreComputer;
     readonly IOmenHardwareGateway hardwareGateway;
+    readonly Action<Exception, string> logError;
+    readonly ConcurrentDictionary<string, DateTime> lastErrorLogUtc = new ConcurrentDictionary<string, DateTime>();
     readonly object stateLock = new object();
     int advancedStatusTick;
     int temperatureSensorRefreshTick;
@@ -73,9 +76,10 @@ namespace OmenSuperHub {
       "gpu board power"
     };
 
-    public HardwareTelemetryService(LibreComputer libreComputer, IOmenHardwareGateway hardwareGateway) {
+    public HardwareTelemetryService(LibreComputer libreComputer, IOmenHardwareGateway hardwareGateway, Action<Exception, string> logError = null) {
       this.libreComputer = libreComputer;
       this.hardwareGateway = hardwareGateway;
+      this.logError = logError;
     }
 
     public HardwareTelemetrySnapshot Poll(HardwareTelemetryRequest request) {
@@ -487,43 +491,50 @@ namespace OmenSuperHub {
 
       try {
         nextGfxMode = hardwareGateway.GetGraphicsMode();
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.gfx_mode");
       }
 
       try {
         var gpuStatus = hardwareGateway.GetGpuStatus();
         if (gpuStatus != null)
           nextGpuStatus = gpuStatus;
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.gpu_status");
       }
 
       try {
         var designData = hardwareGateway.GetSystemDesignData();
         if (designData != null)
           nextSystemDesignData = designData;
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.system_design");
       }
 
       try {
         nextSmartAdapterStatus = hardwareGateway.GetSmartAdapterStatus();
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.smart_adapter");
       }
 
       try {
         var fanTypeInfo = hardwareGateway.GetFanTypeInfo();
         if (fanTypeInfo != null)
           nextFanTypeInfo = fanTypeInfo;
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.fan_type");
       }
 
       try {
         nextKeyboardType = hardwareGateway.GetKeyboardType();
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.keyboard");
       }
 
       try {
         nextBatteryTelemetry = ReadBatteryTelemetry();
-      } catch {
+      } catch (Exception ex) {
+        LogThrottled(ex, "telemetry.battery");
         nextBatteryTelemetry = null;
       }
 
@@ -626,6 +637,21 @@ namespace OmenSuperHub {
         });
       }
       return snapshot;
+    }
+
+    void LogThrottled(Exception ex, string context) {
+      if (ex == null || logError == null || string.IsNullOrWhiteSpace(context)) {
+        return;
+      }
+
+      DateTime now = DateTime.UtcNow;
+      DateTime previous = lastErrorLogUtc.GetOrAdd(context, DateTime.MinValue);
+      if ((now - previous).TotalSeconds < 30) {
+        return;
+      }
+
+      lastErrorLogUtc[context] = now;
+      logError(ex, context);
     }
   }
 }

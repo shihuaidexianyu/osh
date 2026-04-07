@@ -24,6 +24,10 @@ namespace OmenSuperHub {
         }
 
         string command = args[0].Trim().ToLowerInvariant();
+        if (CommandRequiresElevation(command, args) && !IsProcessElevated()) {
+          return RelaunchAsAdmin(args, GetElevationMessage(command, args));
+        }
+
         switch (command) {
           case "daemon":
             return RunDaemon(args);
@@ -72,13 +76,18 @@ namespace OmenSuperHub {
         List<int> fan = control.GetFanLevel();
         Console.WriteLine($"CPU: {FormatTelemetryValue(snapshot.CpuTemperature, "°C")} / {FormatTelemetryValue(snapshot.CpuPowerWatts, "W")}");
         Console.WriteLine($"GPU: {FormatTelemetryValue(snapshot.GpuTemperature, "°C")} / {FormatTelemetryValue(snapshot.GpuPowerWatts, "W")}");
-        Console.WriteLine($"风扇: {(fan.Count > 0 ? fan[0] * 100 : 0)} / {(fan.Count > 1 ? fan[1] * 100 : 0)} RPM");
-        Console.WriteLine($"显卡模式: {snapshot.GraphicsMode}");
-        Console.WriteLine($"适配器: {snapshot.SmartAdapterStatus}");
-        Console.WriteLine($"键盘: {snapshot.KeyboardType}");
+        Console.WriteLine($"风扇: {FormatFanRpm(fan, 0)} / {FormatFanRpm(fan, 1)}");
+        Console.WriteLine($"显卡模式: {FormatGraphicsMode(snapshot.GraphicsMode)}");
+        Console.WriteLine($"适配器: {FormatSmartAdapterStatus(snapshot.SmartAdapterStatus)}");
+        Console.WriteLine($"键盘: {FormatKeyboardType(snapshot.KeyboardType)}");
         Console.WriteLine($"传感器数量: {(snapshot.TemperatureSensors == null ? 0 : snapshot.TemperatureSensors.Count)}");
         if (snapshot.TemperatureSensors == null || snapshot.TemperatureSensors.Count == 0) {
           Console.WriteLine("注意: 当前未获取到温度传感器，部分读数可能不可用。");
+        }
+        if (snapshot.GraphicsMode == OmenHardware.OmenGfxMode.Unknown &&
+            snapshot.SmartAdapterStatus == OmenHardware.OmenSmartAdapterStatus.Unknown &&
+            snapshot.KeyboardType == OmenHardware.OmenKeyboardType.Unknown) {
+          Console.WriteLine("注意: 高级硬件状态暂不可用，可能需要管理员权限或更完整的 WMI 支持。");
         }
       } finally {
         libre.Close();
@@ -204,11 +213,14 @@ namespace OmenSuperHub {
 
     static int RunConfig() {
       var settings = new AppSettingsService();
-      if (!settings.TryLoadConfig(out AppSettingsSnapshot snapshot)) {
+      bool loaded = settings.TryLoadConfig(out AppSettingsSnapshot snapshot);
+      if (!loaded) {
         Console.WriteLine("未找到配置文件，将使用默认配置。");
         snapshot = new AppSettingsSnapshot();
       }
 
+      Console.WriteLine($"ConfigPath={settings.ConfigFilePath}");
+      Console.WriteLine($"ConfigSource={(loaded ? "loaded" : "defaults")}");
       Console.WriteLine($"UsageMode={snapshot.UsageMode}");
       Console.WriteLine($"FanMode={snapshot.FanMode}");
       Console.WriteLine($"FanControl={snapshot.FanControl}");
@@ -317,6 +329,43 @@ namespace OmenSuperHub {
       return false;
     }
 
+    static bool CommandRequiresElevation(string command, string[] args) {
+      switch (command) {
+        case "daemon":
+        case "status":
+        case "preset":
+          return true;
+        case "mode":
+          return !HasFlag(args, "--no-daemon");
+        case "set":
+          return args != null &&
+                 args.Length >= 2 &&
+                 SetKeyRequiresElevation((args[1] ?? string.Empty).Trim().ToLowerInvariant());
+        default:
+          return false;
+      }
+    }
+
+    static string GetElevationMessage(string command, string[] args) {
+      switch (command) {
+        case "daemon":
+          return "正在请求管理员权限并重启 daemon...";
+        case "status":
+          return "正在请求管理员权限并执行 status...";
+        case "mode":
+          return "正在请求管理员权限并执行 mode...";
+        case "preset":
+          return "正在请求管理员权限并执行 preset...";
+        case "set":
+          if (args != null && args.Length >= 2) {
+            return $"正在请求管理员权限并执行 set {args[1]}...";
+          }
+          return "正在请求管理员权限并执行 set...";
+        default:
+          return "正在请求管理员权限...";
+      }
+    }
+
     static bool IsDaemonRunning() {
       Mutex daemonMutex = null;
       try {
@@ -368,6 +417,10 @@ namespace OmenSuperHub {
         return 2;
       }
 
+      if (!IsProcessElevated()) {
+        return RelaunchAsAdmin(args, "正在请求管理员权限并执行 preset...");
+      }
+
       if (!TryParseModePreset(args[1], allowShortAlias: false, out UsageModePreset preset)) {
         Console.WriteLine($"不支持的 preset: {args[1]}");
         Console.WriteLine("可用 preset: quiet|balanced|performance|max");
@@ -403,7 +456,7 @@ namespace OmenSuperHub {
         return 1;
       }
 
-      Console.WriteLine($"已应用预设: {snapshot.UsageMode}");
+      Console.WriteLine($"已应用预设并保存配置: {snapshot.UsageMode}");
       return 0;
     }
 
@@ -415,6 +468,15 @@ namespace OmenSuperHub {
 
       string key = args[1].Trim().ToLowerInvariant();
       string value = args[2].Trim();
+      if (!IsSupportedSetKey(key)) {
+        Console.WriteLine($"不支持的 key: {key}");
+        Console.WriteLine($"支持的 key: {GetSupportedSetKeysDescription()}");
+        return 2;
+      }
+
+      if (SetKeyRequiresElevation(key) && !IsProcessElevated()) {
+        return RelaunchAsAdmin(args, $"正在请求管理员权限并执行 set {key}...");
+      }
 
       var settingsService = new AppSettingsService();
       var gateway = new OmenHardwareGateway();
@@ -529,9 +591,6 @@ namespace OmenSuperHub {
             snapshot.OmenKey = omenKey;
             break;
           }
-        default:
-          Console.WriteLine($"不支持的 key: {key}");
-          return 2;
       }
 
       snapshot.UsageMode = "custom";
@@ -540,7 +599,7 @@ namespace OmenSuperHub {
         return 1;
       }
 
-      Console.WriteLine($"已设置 {key} = {GetAppliedValue(snapshot, key)}");
+      Console.WriteLine(BuildSetSuccessMessage(key, snapshot));
       return 0;
     }
 
@@ -581,7 +640,7 @@ namespace OmenSuperHub {
       Console.WriteLine("      fan-mode <default|performance>");
       Console.WriteLine("      fan-control <auto|max|\"3200 RPM\">");
       Console.WriteLine("      fan-table <silent|cool>");
-      Console.WriteLine("      temp-sensitivity <low|medium|high|realtime>");
+      Console.WriteLine("      temp-sensitivity <low|medium|normal|high|realtime>");
       Console.WriteLine("      cpu-power <max|45|65|90|\"65 W\">");
       Console.WriteLine("      gpu-power <min|med|max>");
       Console.WriteLine("      gpu-clock <0|1600|1800|...>");
@@ -605,6 +664,106 @@ namespace OmenSuperHub {
       }
 
       return $"{value:F1} {unit}";
+    }
+
+    static string FormatFanRpm(List<int> fanLevels, int index) {
+      if (fanLevels == null || index < 0 || index >= fanLevels.Count) {
+        return "Unknown";
+      }
+
+      int raw = fanLevels[index];
+      return raw > 0 ? $"{raw * 100} RPM" : "Unknown";
+    }
+
+    static string FormatGraphicsMode(OmenHardware.OmenGfxMode mode) {
+      switch (mode) {
+        case OmenHardware.OmenGfxMode.Hybrid:
+          return "hybrid";
+        case OmenHardware.OmenGfxMode.Discrete:
+          return "discrete";
+        case OmenHardware.OmenGfxMode.Optimus:
+          return "optimus";
+        default:
+          return "unknown";
+      }
+    }
+
+    static string FormatSmartAdapterStatus(OmenHardware.OmenSmartAdapterStatus status) {
+      switch (status) {
+        case OmenHardware.OmenSmartAdapterStatus.NoSupport:
+          return "no-support";
+        case OmenHardware.OmenSmartAdapterStatus.MeetsRequirement:
+          return "ok";
+        case OmenHardware.OmenSmartAdapterStatus.BelowRequirement:
+          return "below-requirement";
+        case OmenHardware.OmenSmartAdapterStatus.BatteryPower:
+          return "battery";
+        case OmenHardware.OmenSmartAdapterStatus.NotFunctioning:
+          return "fault";
+        default:
+          return "unknown";
+      }
+    }
+
+    static string FormatKeyboardType(OmenHardware.OmenKeyboardType type) {
+      switch (type) {
+        case OmenHardware.OmenKeyboardType.Standard:
+          return "standard";
+        case OmenHardware.OmenKeyboardType.WithNumpad:
+          return "with-numpad";
+        case OmenHardware.OmenKeyboardType.Tenkeyless:
+          return "tenkeyless";
+        case OmenHardware.OmenKeyboardType.PerKeyRgb:
+          return "per-key-rgb";
+        default:
+          return "unknown";
+      }
+    }
+
+    static bool IsSupportedSetKey(string key) {
+      switch (key) {
+        case "fan-mode":
+        case "fan-control":
+        case "fan-table":
+        case "temp-sensitivity":
+        case "cpu-power":
+        case "gpu-power":
+        case "gpu-clock":
+        case "smart-power":
+        case "omen-key":
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    static bool SetKeyRequiresElevation(string key) {
+      switch (key) {
+        case "fan-mode":
+        case "fan-control":
+        case "cpu-power":
+        case "gpu-power":
+        case "gpu-clock":
+        case "omen-key":
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    static bool SetKeyIsDaemonDriven(string key) {
+      switch (key) {
+        case "fan-table":
+        case "temp-sensitivity":
+        case "smart-power":
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    static string GetSupportedSetKeysDescription() {
+      return "fan-mode, fan-control, fan-table, temp-sensitivity, cpu-power, gpu-power, gpu-clock, smart-power, omen-key";
     }
 
     static bool TryParseFanModeValue(string value, out FanModeOption mode) {
@@ -812,6 +971,17 @@ namespace OmenSuperHub {
         default:
           return string.Empty;
       }
+    }
+
+    static string BuildSetSuccessMessage(string key, AppSettingsSnapshot snapshot) {
+      string appliedValue = GetAppliedValue(snapshot, key);
+      if (SetKeyIsDaemonDriven(key)) {
+        return IsDaemonRunning()
+          ? $"已保存 {key} = {appliedValue}。后台调度将在下一次轮询时生效。"
+          : $"已保存 {key} = {appliedValue}。下次启动 daemon 后生效。";
+      }
+
+      return $"已立即应用并保存 {key} = {appliedValue}";
     }
   }
 }

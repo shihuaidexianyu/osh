@@ -19,6 +19,7 @@ namespace OmenSuperHub {
   }
 
   internal sealed class AppShellService : IDisposable {
+    static readonly Icon defaultTrayIcon = SystemIcons.Application;
     NotifyIcon trayIcon;
     System.Windows.Forms.Timer tooltipTimer;
     FloatingForm floatingForm;
@@ -31,7 +32,7 @@ namespace OmenSuperHub {
       }
 
       trayIcon = new NotifyIcon {
-        Icon = Properties.Resources.smallfan,
+        Icon = defaultTrayIcon,
         ContextMenuStrip = new ContextMenuStrip(),
         Visible = true
       };
@@ -111,14 +112,14 @@ namespace OmenSuperHub {
           if (!string.IsNullOrWhiteSpace(status.CustomIconPath) && File.Exists(status.CustomIconPath)) {
             SetTrayIcon(new Icon(status.CustomIconPath), true);
           } else {
-            SetTrayIcon(Properties.Resources.smallfan, false);
+            SetTrayIcon(defaultTrayIcon, false);
           }
           break;
         case "dynamic":
           SetTrayIcon(CreateDynamicIcon(status.DynamicIconValue), true);
           break;
         default:
-          SetTrayIcon(Properties.Resources.smallfan, false);
+          SetTrayIcon(defaultTrayIcon, false);
           break;
       }
     }
@@ -160,7 +161,7 @@ namespace OmenSuperHub {
         return;
       }
 
-      if (!ReferenceEquals(icon, ownedTrayIcon) && !ReferenceEquals(icon, Properties.Resources.smallfan)) {
+      if (!ReferenceEquals(icon, ownedTrayIcon) && !ReferenceEquals(icon, defaultTrayIcon)) {
         ReleaseOwnedTrayIcon();
       }
 

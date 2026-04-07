@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 using static OmenSuperHub.OmenHardware;
@@ -703,16 +702,15 @@ namespace OmenSuperHub {
     }
 
     Border BuildTemperatureSensorsPanel() {
-      var card = CreateCard(360);
+      var card = CreateCard(300);
       var root = new Grid();
-      root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
       root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
       var titleWrap = new StackPanel();
       titleWrap.Children.Add(CreateSectionTitle("温度传感器"));
-      titleWrap.Children.Add(CreateSectionSubtitle("递归读取主硬件与子硬件的全部温度传感器。"));
+      titleWrap.Children.Add(CreateSectionSubtitle("展示当前最高温与关键传感器，去除复杂图表。"));
       Grid.SetRow(titleWrap, 0);
       root.Children.Add(titleWrap);
 
@@ -726,69 +724,28 @@ namespace OmenSuperHub {
       Grid.SetRow(temperatureSensorSummaryText, 1);
       root.Children.Add(temperatureSensorSummaryText);
 
-      var legendWrap = new WrapPanel {
-        Margin = new Thickness(0, 0, 0, 10)
-      };
-      legendWrap.Children.Add(CreateChartLegendItem(accentBlue, "CPU 参考温度（Package）"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.IndianRed, "GPU 参考温度"));
-      legendWrap.Children.Add(CreateChartLegendItem(accentOrange, "当前最高传感器温度"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.ForestGreen, "CPU 保护温度线"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DarkOliveGreen, "GPU 保护温度线"));
-      legendWrap.Children.Add(CreateChartLegendItem(Brushes.DimGray, "CPU 功耗限制线"));
-      Grid.SetRow(legendWrap, 2);
-      root.Children.Add(legendWrap);
-
-      var chartBorder = new Border {
+      var sensorBorder = new Border {
         BorderThickness = new Thickness(1),
         BorderBrush = borderColor,
-        Background = Brushes.White,
-        CornerRadius = new CornerRadius(6),
-        MinHeight = 220,
-        Padding = new Thickness(4)
-      };
-
-      temperatureTrendCanvas = new Canvas {
         Background = subtleFill,
-        Height = 220,
-        ClipToBounds = true
+        CornerRadius = new CornerRadius(10),
+        MinHeight = 180,
+        Padding = new Thickness(12)
       };
-      chartBorder.Child = temperatureTrendCanvas;
 
-      Grid.SetRow(chartBorder, 3);
-      root.Children.Add(chartBorder);
+      temperatureSensorListText = new TextBlock {
+        Text = "--",
+        Foreground = strongText,
+        FontSize = 13,
+        TextWrapping = TextWrapping.Wrap
+      };
+      sensorBorder.Child = temperatureSensorListText;
+
+      Grid.SetRow(sensorBorder, 2);
+      root.Children.Add(sensorBorder);
 
       card.Child = root;
       return card;
-    }
-
-    FrameworkElement CreateChartLegendItem(Brush color, string label) {
-      var row = new StackPanel {
-        Orientation = Orientation.Horizontal,
-        VerticalAlignment = VerticalAlignment.Center
-      };
-      row.Children.Add(new Border {
-        Width = 18,
-        Height = 3,
-        Background = color,
-        CornerRadius = new CornerRadius(2),
-        Margin = new Thickness(0, 0, 6, 0),
-        VerticalAlignment = VerticalAlignment.Center
-      });
-      row.Children.Add(new TextBlock {
-        Text = label,
-        Foreground = mutedText,
-        FontSize = 12,
-        VerticalAlignment = VerticalAlignment.Center
-      });
-      return new Border {
-        Background = subtleFill,
-        BorderBrush = borderColor,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10),
-        Padding = new Thickness(10, 6, 10, 6),
-        Margin = new Thickness(0, 0, 10, 8),
-        Child = row
-      };
     }
 
     Grid CreateSettingsGrid() {

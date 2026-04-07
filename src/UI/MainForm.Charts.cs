@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 using static OmenSuperHub.OmenHardware;
@@ -72,181 +71,33 @@ namespace OmenSuperHub {
     }
 
     void UpdateTemperatureSensorsView(DashboardSnapshot snapshot) {
-      if (temperatureSensorSummaryText == null || temperatureTrendCanvas == null) {
+      if (temperatureSensorSummaryText == null || temperatureSensorListText == null) {
         return;
       }
 
       var sensors = snapshot?.TemperatureSensors;
       if (sensors == null || sensors.Count == 0) {
         temperatureSensorSummaryText.Text = "未读取到温度传感器。";
+        temperatureSensorListText.Text = "--";
         return;
       }
 
       var hottest = sensors[0];
-      AppendHistory(cpuControlTempHistory, snapshot.ControlCpuTemperature);
-      AppendHistory(gpuControlTempHistory, snapshot.MonitorGpu ? snapshot.ControlGpuTemperature : float.NaN);
-      AppendHistory(hottestTempHistory, hottest.Celsius);
-      AppendHistory(cpuWallTempHistory, snapshot.ControlCpuTempWall);
-      AppendHistory(gpuWallTempHistory, snapshot.ControlGpuTempWall);
-      AppendHistory(cpuLimitHistory, snapshot.SmartCpuLimitWatts > 0 ? snapshot.SmartCpuLimitWatts : float.NaN);
-
       temperatureSensorSummaryText.Text =
         $"已读取 {sensors.Count} 个传感器，当前最高温 {hottest.Celsius:F1} °C。";
 
-      DrawTemperatureTrendChart();
-    }
-
-    void AppendHistory(List<float> history, float value) {
-      if (history == null) {
-        return;
-      }
-
-      history.Add(value);
-      if (history.Count > TemperatureTrendCapacity) {
-        history.RemoveAt(0);
-      }
-    }
-
-    void DrawTemperatureTrendChart() {
-      if (temperatureTrendCanvas == null) {
-        return;
-      }
-
-      double width = temperatureTrendCanvas.ActualWidth;
-      if (width < 40) width = 720;
-      double height = temperatureTrendCanvas.ActualHeight;
-      if (height < 40) height = 220;
-
-      float minTemp = 50f;
-      float maxTemp = 100f;
-      ExpandTemperatureRange(cpuControlTempHistory, ref minTemp, ref maxTemp);
-      ExpandTemperatureRange(gpuControlTempHistory, ref minTemp, ref maxTemp);
-      ExpandTemperatureRange(hottestTempHistory, ref minTemp, ref maxTemp);
-      ExpandTemperatureRange(cpuWallTempHistory, ref minTemp, ref maxTemp);
-      ExpandTemperatureRange(gpuWallTempHistory, ref minTemp, ref maxTemp);
-      minTemp = Math.Max(20f, minTemp - 2f);
-      maxTemp = Math.Min(110f, maxTemp + 2f);
-      if (maxTemp - minTemp < 12f) {
-        maxTemp = minTemp + 12f;
-      }
-
-      temperatureTrendCanvas.Children.Clear();
-      DrawChartGrid(width, height, minTemp, maxTemp);
-      DrawSeries(cpuControlTempHistory, width, height, minTemp, maxTemp, accentBlue, 2.2, null);
-      DrawSeries(gpuControlTempHistory, width, height, minTemp, maxTemp, Brushes.IndianRed, 2.0, null);
-      DrawSeries(hottestTempHistory, width, height, minTemp, maxTemp, accentOrange, 1.8, null);
-      DrawSeries(cpuWallTempHistory, width, height, minTemp, maxTemp, Brushes.ForestGreen, 1.4, new DoubleCollection { 3, 2 });
-      DrawSeries(gpuWallTempHistory, width, height, minTemp, maxTemp, Brushes.DarkOliveGreen, 1.4, new DoubleCollection { 3, 2 });
-      DrawCpuLimitOverlay(width, height, Brushes.DimGray);
-    }
-
-    void ExpandTemperatureRange(List<float> values, ref float minTemp, ref float maxTemp) {
-      if (values == null) {
-        return;
-      }
-
-      foreach (float value in values) {
-        if (float.IsNaN(value)) {
+      int topCount = Math.Min(8, sensors.Count);
+      var lines = new List<string>(topCount + 1);
+      lines.Add("Top 传感器温度:");
+      for (int i = 0; i < topCount; i++) {
+        var sensor = sensors[i];
+        if (sensor == null) {
           continue;
         }
-
-        if (value < minTemp) minTemp = value;
-        if (value > maxTemp) maxTemp = value;
-      }
-    }
-
-    void DrawChartGrid(double width, double height, float minTemp, float maxTemp) {
-      const int rows = 5;
-      for (int i = 0; i <= rows; i++) {
-        double y = i * (height / rows);
-        var line = new Line {
-          X1 = 0,
-          Y1 = y,
-          X2 = width,
-          Y2 = y,
-          Stroke = new SolidColorBrush(Color.FromRgb(230, 233, 238)),
-          StrokeThickness = i == rows ? 1.1 : 0.8
-        };
-        temperatureTrendCanvas.Children.Add(line);
-
-        float temp = maxTemp - (float)((maxTemp - minTemp) * (y / height));
-        var label = new TextBlock {
-          Text = $"{temp:F0}°",
-          Foreground = mutedText,
-          FontSize = 10
-        };
-        Canvas.SetLeft(label, 4);
-        Canvas.SetTop(label, Math.Max(0, y - 12));
-        temperatureTrendCanvas.Children.Add(label);
-      }
-    }
-
-    void DrawSeries(List<float> values, double width, double height, float minTemp, float maxTemp, Brush stroke, double thickness, DoubleCollection dash) {
-      if (values == null || values.Count < 2) {
-        return;
+        lines.Add($"{i + 1}. {sensor.Name}  {sensor.Celsius:F1} °C");
       }
 
-      int count = values.Count;
-      var polyline = new Polyline {
-        Stroke = stroke,
-        StrokeThickness = thickness,
-        SnapsToDevicePixels = true
-      };
-      if (dash != null) {
-        polyline.StrokeDashArray = dash;
-      }
-
-      double xStep = count > 1 ? width / (count - 1) : width;
-      for (int i = 0; i < count; i++) {
-        float value = values[i];
-        if (float.IsNaN(value)) {
-          continue;
-        }
-
-        double x = i * xStep;
-        double ratio = (value - minTemp) / Math.Max(0.001f, maxTemp - minTemp);
-        double y = height - (ratio * height);
-        y = ClampDouble(y, 0, height);
-        polyline.Points.Add(new Point(x, y));
-      }
-
-      if (polyline.Points.Count >= 2) {
-        temperatureTrendCanvas.Children.Add(polyline);
-      }
-    }
-
-    void DrawCpuLimitOverlay(double width, double height, Brush stroke) {
-      if (cpuLimitHistory == null || cpuLimitHistory.Count < 2) {
-        return;
-      }
-
-      const float minLimit = 25f;
-      const float maxLimit = 125f;
-      int count = cpuLimitHistory.Count;
-      double xStep = count > 1 ? width / (count - 1) : width;
-
-      var polyline = new Polyline {
-        Stroke = stroke,
-        StrokeThickness = 1.2,
-        StrokeDashArray = new DoubleCollection { 2, 3 },
-        Opacity = 0.6
-      };
-
-      for (int i = 0; i < count; i++) {
-        float value = cpuLimitHistory[i];
-        if (float.IsNaN(value)) {
-          continue;
-        }
-
-        double x = i * xStep;
-        double ratio = (value - minLimit) / (maxLimit - minLimit);
-        double y = height - ClampDouble(ratio, 0, 1) * height;
-        polyline.Points.Add(new Point(x, y));
-      }
-
-      if (polyline.Points.Count >= 2) {
-        temperatureTrendCanvas.Children.Add(polyline);
-      }
+      temperatureSensorListText.Text = string.Join("\n", lines);
     }
 
     string FormatSmartStateLabel(string state) {

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 using static OmenSuperHub.OmenHardware;
@@ -84,7 +83,7 @@ namespace OmenSuperHub {
     TextBlock keyboardText;
     TextBlock fanTypeText;
     TextBlock temperatureSensorSummaryText;
-    Canvas temperatureTrendCanvas;
+    TextBlock temperatureSensorListText;
     Border smartStateBadge;
     TextBlock smartStateText;
     TextBlock smartReasonText;
@@ -130,14 +129,6 @@ namespace OmenSuperHub {
     CheckBox autoStartCheckBox;
     CheckBox smartPowerControlCheckBox;
     Button floatingBarButton;
-
-    readonly List<float> cpuControlTempHistory = new List<float>();
-    readonly List<float> gpuControlTempHistory = new List<float>();
-    readonly List<float> hottestTempHistory = new List<float>();
-    readonly List<float> cpuWallTempHistory = new List<float>();
-    readonly List<float> gpuWallTempHistory = new List<float>();
-    readonly List<float> cpuLimitHistory = new List<float>();
-    const int TemperatureTrendCapacity = 240;
 
     MainForm(IAppController appController) {
       this.appController = appController;

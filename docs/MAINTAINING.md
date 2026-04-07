@@ -1,80 +1,59 @@
-# OmenSuperHub Maintenance Map (CLI)
+# OmenSuperHub Maintenance Map (CLI-only)
 
-This project is organized for low-risk iterative changes, especially when the next editor is an AI assistant.
+本仓库当前是 CLI-only 架构，维护时请以“命令层 -> 服务层 -> 硬件层”的方向进行。
 
-## Dependency direction
-
-Keep dependencies flowing in this order:
+## 依赖方向
 
 `CLI -> App -> Services -> Hardware`
 
 - `src/App`
-  - CLI command entry, command orchestration, and strongly typed control settings.
+  - CLI 入口与命令路由（`Program.cs`, `CliApp.cs`）
+  - 强类型控制参数映射（`AppControlSettings.cs`）
 - `src/App/Services`
-  - Config restore, telemetry, startup task management, and hardware control semantics.
+  - 配置、遥测、硬件控制、自启动任务、外部命令执行
 - `src/Hardware`
-  - BIOS/WMI access and hardware model types.
+  - BIOS/WMI 交互与硬件模型
 - `src/Core`
-  - Control logic that should stay UI-agnostic and hardware-agnostic.
+  - 纯控制逻辑（如 `PowerController`）
 
-## Where to edit
+## 已移除模块（不要再作为修改入口）
 
-- Add or change a dashboard field:
-  - Start in `src/App/Services/DashboardSnapshotBuilder.cs`
-  - Then update `src/UI/MainForm.Interaction.cs` or `src/UI/MainForm.Charts.cs`
-- Change startup/config restore behavior:
-  - Start in `src/App/Services/SettingsRestoreService.cs`
-  - Then update `src/App/Program.cs` only if runtime side effects must change
-- Change tray icon or floating overlay behavior:
-  - Start in `src/App/Services/ShellStatusBuilder.cs`
-  - Then update `src/App/Services/AppShellService.cs`
-- Change a hardware write path:
-  - Start in `src/App/Services/HardwareControlService.cs`
-  - Only go to `src/Hardware/OmenHardwareGateway.cs` when BIOS/WMI details must change
-- Change hardware polling/telemetry interpretation:
-  - Start in `src/App/Services/HardwareTelemetryService.cs`
+- `src/UI/*`
+- `AppRuntime*`
+- `ShellStatusBuilder` / `AppShellService`
+- `DashboardSnapshotBuilder` / `DashboardModels`
 
-## CLI entry
+如果看到旧分支或历史文档还提到这些模块，请以当前代码树为准。
 
-The executable is now CLI-only. Main entry and command dispatch are in:
+## 常见改动落点
 
-- `src/App/Program.cs`
-- `src/App/CliApp.cs`
+- 新增 CLI 子命令：`src/App/CliApp.cs`
+- 调整配置持久化：`src/App/Services/AppSettingsService.cs`
+- 调整启动项行为：`src/App/Services/StartupTaskService.cs`
+- 调整风扇曲线策略：`src/App/Services/FanCurveService.cs`
+- 调整遥测解释逻辑：`src/App/Services/HardwareTelemetryService.cs`
+- 调整硬件写入路径：`src/App/Services/HardwareControlService.cs`
+- 修改 BIOS/WMI 协议细节：`src/Hardware/OmenHardwareGateway.cs`
 
-Primary command groups currently include:
+## 维护守则
 
-- `status`
-- `config`
-- `preset`
-- `set`
+- 不要在 CLI 参数解析层直接写 BIOS/WMI，统一走 service。
+- 新配置项优先扩展 `RuntimeControlSettings`（`AppControlSettings.cs`）语义，不要散落字符串常量。
+- 功能变更优先补充/更新测试，再改实现。
 
-## Runtime note
+## 测试范围
 
-Legacy GUI runtime (`AppRuntime` and `src/UI`) is removed from project build. Maintenance should target `CliApp` and services.
+当前测试项目：`tests/OmenSuperHub.Tests`
 
-## Startup task management
-
-Windows startup task and legacy startup artifact cleanup are encapsulated in:
-
-- `src/App/Services/StartupTaskService.cs`
-
-If your change only affects scheduled-task registration, privilege level, or legacy cleanup commands, edit this service rather than `AppRuntime`.
-
-## Guardrails
-
-- Do not call BIOS/WMI code directly from CLI argument parsing; route through services.
-- Prefer extending `RuntimeControlSettings` instead of adding new free-form setting strings.
-- If a change only affects config-to-UI mapping, prefer editing `SettingsRestoreService` over `Program.cs`.
-- If a change only affects snapshot projection, prefer editing a builder over adding more logic to `AppRuntime`.
-- Keep new pure logic in services or builders so it can be covered by tests.
-
-## Tests
-
-The test project covers the lowest-risk, highest-value maintenance surfaces:
+主要覆盖：
 
 - `RuntimeControlSettings`
 - `SettingsRestoreService`
-- `DashboardSnapshotBuilder`
-- `ShellStatusBuilder`
+- `FanCurveService`
+- `PowerController`
 
-When adding new configuration mapping or snapshot formatting logic, extend those tests first.
+建议每次改动后运行：
+
+```powershell
+dotnet test tests/OmenSuperHub.Tests/OmenSuperHub.Tests.csproj -c Debug -p:Platform=x64
+```

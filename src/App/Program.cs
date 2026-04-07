@@ -326,8 +326,7 @@ namespace OmenSuperHub {
   static class Program {
     [STAThread]
     static void Main(string[] args) {
-      AppRuntime runtime = new AppRuntime();
-      Application.Run(new AppApplicationContext(runtime, args));
+      Environment.ExitCode = CliApp.Run(args);
     }
   }
 }

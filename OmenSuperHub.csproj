@@ -7,7 +7,7 @@
     <ProjectGuid>{F5E0C1F7-9E9B-46F2-AC88-8C9C1C923880}</ProjectGuid>
     <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <NoStandardLibraries>false</NoStandardLibraries>
     <AssemblyName>OmenSuperHub</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
@@ -117,6 +117,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\App\AppApplicationContext.cs" />
+    <Compile Include="src\App\CliApp.cs" />
     <Compile Include="src\App\AppRuntime.ControlApply.cs" />
     <Compile Include="src\App\AppRuntime.ControlLoop.cs" />
     <Compile Include="src\App\AppRuntime.Lifecycle.cs" />

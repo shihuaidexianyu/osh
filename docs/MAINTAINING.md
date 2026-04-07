@@ -65,6 +65,8 @@ If a UI change only affects one of these concerns, keep the edit in that file.
   - Startup, single-instance guard, pipe listener, shutdown, and fatal exception hooks
 - `AppRuntime.ControlLoop.cs`
   - Hardware polling, fan control loop, power-event handling, and smart power control execution
+- `AppRuntime.ShellBridge.cs`
+  - Tray/floating UI bridge methods and shell interaction callbacks
 
 When changing runtime behavior, prefer editing the most specific partial file first.
 

@@ -270,19 +270,6 @@ namespace OmenSuperHub {
       return source != null;
     }
 
-    public static float? GetBatteryPowerWatts(BatteryTelemetry telemetry) {
-      if (telemetry == null)
-        return null;
-
-      if (telemetry.Discharging && telemetry.DischargeRateMilliwatts > 0)
-        return telemetry.DischargeRateMilliwatts / 1000f;
-
-      if (telemetry.Charging && telemetry.ChargeRateMilliwatts > 0)
-        return telemetry.ChargeRateMilliwatts / 1000f;
-
-      return null;
-    }
-
     static void UpdateNvidiaGpuSensorCandidate(LibreISensor sensor, ref int bestTempScore, ref float bestTemp, ref int bestPowerScore, ref float bestPower) {
       if (sensor == null || !sensor.Value.HasValue) {
         return;

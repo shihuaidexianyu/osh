@@ -28,21 +28,11 @@ namespace OmenSuperHub {
     [DataMember]
     public string AutoStart { get; set; } = "off";
     [DataMember]
-    public int AlreadyRead { get; set; }
-    [DataMember]
-    public string CustomIcon { get; set; } = "original";
-    [DataMember]
     public string OmenKey { get; set; } = "default";
     [DataMember]
     public bool MonitorFan { get; set; } = true;
     [DataMember]
     public bool SmartPowerControlEnabled { get; set; } = true;
-    [DataMember]
-    public int FloatingBarSize { get; set; } = 48;
-    [DataMember]
-    public string FloatingBarLocation { get; set; } = "left";
-    [DataMember]
-    public string FloatingBar { get; set; } = "off";
     [DataMember]
     public PowerControlTuning PowerControlTuning { get; set; } = PowerController.CreateDefaultTuning();
     [DataMember]
@@ -86,7 +76,7 @@ namespace OmenSuperHub {
       }
     }
 
-    public void SaveConfig(AppSettingsSnapshot snapshot, string configName = null) {
+    public void SaveConfig(AppSettingsSnapshot snapshot) {
       if (snapshot == null) {
         return;
       }
@@ -97,20 +87,6 @@ namespace OmenSuperHub {
         WriteSnapshot(document);
       } catch (Exception ex) {
         Console.WriteLine($"Error saving configuration: {ex.Message}");
-      }
-    }
-
-    public void SavePowerControlTuning(PowerControlTuning tuning) {
-      if (tuning == null) {
-        return;
-      }
-
-      try {
-        AppSettingsSnapshot document = ReadSnapshotOrDefault();
-        document.PowerControlTuning = tuning.Clone();
-        WriteSnapshot(document);
-      } catch (Exception ex) {
-        Console.WriteLine($"Error saving power tuning: {ex.Message}");
       }
     }
 
@@ -180,14 +156,9 @@ namespace OmenSuperHub {
       target.GpuPower = source.GpuPower;
       target.GpuClock = source.GpuClock;
       target.AutoStart = source.AutoStart;
-      target.AlreadyRead = source.AlreadyRead;
-      target.CustomIcon = source.CustomIcon;
       target.OmenKey = source.OmenKey;
       target.MonitorFan = source.MonitorFan;
       target.SmartPowerControlEnabled = source.SmartPowerControlEnabled;
-      target.FloatingBarSize = source.FloatingBarSize;
-      target.FloatingBarLocation = source.FloatingBarLocation;
-      target.FloatingBar = source.FloatingBar;
     }
 
     static AppSettingsSnapshot NormalizeSnapshot(AppSettingsSnapshot snapshot) {
@@ -205,26 +176,12 @@ namespace OmenSuperHub {
       snapshot.GpuPower = RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseGpuPower(snapshot.GpuPower));
       snapshot.GpuClock = Math.Max(0, snapshot.GpuClock);
       snapshot.AutoStart = snapshot.AutoStart == "on" ? "on" : "off";
-      snapshot.CustomIcon = NormalizeCustomIcon(snapshot.CustomIcon);
       snapshot.OmenKey = NormalizeOmenKey(snapshot.OmenKey);
-      snapshot.FloatingBarSize = NormalizeFloatingBarSize(snapshot.FloatingBarSize);
-      snapshot.FloatingBarLocation = snapshot.FloatingBarLocation == "right" ? "right" : "left";
-      snapshot.FloatingBar = snapshot.FloatingBar == "on" ? "on" : "off";
       snapshot.PowerControlTuning = snapshot.PowerControlTuning == null
         ? PowerController.CreateDefaultTuning()
         : snapshot.PowerControlTuning.Clone();
       snapshot.FanCurveProfiles = CloneProfiles(snapshot.FanCurveProfiles);
       return snapshot;
-    }
-
-    static string NormalizeCustomIcon(string value) {
-      switch (value) {
-        case "custom":
-        case "dynamic":
-          return value;
-        default:
-          return "original";
-      }
     }
 
     static string NormalizeOmenKey(string value) {
@@ -234,16 +191,6 @@ namespace OmenSuperHub {
           return value;
         default:
           return "default";
-      }
-    }
-
-    static int NormalizeFloatingBarSize(int value) {
-      switch (value) {
-        case 24:
-        case 36:
-          return value;
-        default:
-          return 48;
       }
     }
 

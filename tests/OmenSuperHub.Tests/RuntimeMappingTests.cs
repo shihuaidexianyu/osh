@@ -34,41 +34,36 @@ namespace OmenSuperHub.Tests {
     }
 
     [TestMethod]
-    public void SettingsRestoreService_BuildPlan_NormalizesSnapshotAndProducesMenuSelections() {
-      var service = new SettingsRestoreService(new AppSettingsService());
-      var snapshot = new AppSettingsSnapshot {
-        UsageMode = "performance",
-        FanMode = "performance",
-        FanControl = "3100 RPM",
-        FanTable = "cool",
-        TempSensitivity = "high",
-        CpuPower = "75 W",
-        GpuPower = "max",
-        GpuClock = 2400,
-        AutoStart = "on",
-        CustomIcon = "dynamic",
-        OmenKey = "custom",
-        MonitorFan = false,
-        FloatingBarSize = 36,
-        FloatingBarLocation = "right",
-        FloatingBar = "on"
-      };
+    public void AppSettingsService_TryLoadConfig_NormalizesRuntimeSettingsAndIgnoresLegacyFields() {
+      string tempDir = Path.Combine(Path.GetTempPath(), "OmenSuperHub.Tests", Path.GetRandomFileName());
+      string configPath = Path.Combine(tempDir, "settings.json");
 
-      SettingsRestorePlan plan = service.BuildPlan(snapshot);
+      Directory.CreateDirectory(tempDir);
+      try {
+        File.WriteAllText(configPath,
+          "{\"UsageMode\":\"performance\",\"FanMode\":\"performance\",\"FanControl\":\"3100 RPM\",\"FanTable\":\"cool\",\"TempSensitivity\":\"high\",\"CpuPower\":\"75 W\",\"GpuPower\":\"max\",\"GpuClock\":2400,\"AutoStart\":\"on\",\"OmenKey\":\"custom\",\"MonitorFan\":false,\"SmartPowerControlEnabled\":false,\"CustomIcon\":\"dynamic\",\"FloatingBar\":\"on\"}");
 
-      Assert.AreEqual("performance", plan.UsageMode);
-      Assert.AreEqual("on", plan.AutoStart);
-      Assert.AreEqual("dynamic", plan.CustomIcon);
-      Assert.AreEqual("custom", plan.OmenKey);
-      Assert.AreEqual(36, plan.FloatingBarSize);
-      Assert.AreEqual("right", plan.FloatingBarLocation);
-      Assert.AreEqual("on", plan.FloatingBar);
-      CollectionAssert.Contains(GetSelectionKeys(plan), "autoStartGroup:开启");
-      CollectionAssert.Contains(GetSelectionKeys(plan), "fanControlGroup:3100 RPM");
-      CollectionAssert.Contains(GetSelectionKeys(plan), "gpuClockGroup:2400 MHz");
-      CollectionAssert.Contains(GetSelectionKeys(plan), "omenKeyGroup:切换浮窗显示");
-      CollectionAssert.Contains(GetSelectionKeys(plan), "monitorFanGroup:关闭风扇监控");
-      CollectionAssert.Contains(GetSelectionKeys(plan), "floatingBarGroup:显示浮窗");
+        var service = new AppSettingsService(configPath);
+        bool loaded = service.TryLoadConfig(out AppSettingsSnapshot snapshot);
+
+        Assert.IsTrue(loaded);
+        Assert.AreEqual("performance", snapshot.UsageMode);
+        Assert.AreEqual("performance", snapshot.FanMode);
+        Assert.AreEqual("3100 RPM", snapshot.FanControl);
+        Assert.AreEqual("cool", snapshot.FanTable);
+        Assert.AreEqual("high", snapshot.TempSensitivity);
+        Assert.AreEqual("75 W", snapshot.CpuPower);
+        Assert.AreEqual("max", snapshot.GpuPower);
+        Assert.AreEqual(2400, snapshot.GpuClock);
+        Assert.AreEqual("on", snapshot.AutoStart);
+        Assert.AreEqual("custom", snapshot.OmenKey);
+        Assert.IsFalse(snapshot.MonitorFan);
+        Assert.IsFalse(snapshot.SmartPowerControlEnabled);
+      } finally {
+        if (Directory.Exists(tempDir)) {
+          Directory.Delete(tempDir, recursive: true);
+        }
+      }
     }
 
     [TestMethod]
@@ -94,15 +89,6 @@ namespace OmenSuperHub.Tests {
         }
       }
     }
-
-    static List<string> GetSelectionKeys(SettingsRestorePlan plan) {
-      var keys = new List<string>();
-      foreach (CheckedMenuSelection selection in plan.CheckedMenuSelections) {
-        keys.Add(selection.Group + ":" + selection.ItemText);
-      }
-      return keys;
-    }
-
     sealed class FakeHardwareGateway : IOmenHardwareGateway {
       public OmenSystemDesignData SystemDesignData { get; set; }
       public void GetFanCount() { }

@@ -122,7 +122,6 @@
     <Compile Include="src\App\Services\StartupTaskService.cs" />
     <Compile Include="src\App\Services\FanCurveService.cs" />
     <Compile Include="src\App\Services\HardwareTelemetryService.cs" />
-    <Compile Include="src\App\Services\SettingsRestoreService.cs" />
     <Compile Include="src\Hardware\IOmenHardwareGateway.cs" />
     <Compile Include="src\Hardware\OmenHardwareGateway.cs" />
     <Compile Include="src\Core\Control\PowerController.cs" />
@@ -137,7 +136,6 @@
     <None Include="app.manifest" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
     <None Include="README.md" />
     <None Include="Resources\fan.ico" />
   </ItemGroup>

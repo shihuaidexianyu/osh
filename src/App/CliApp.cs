@@ -218,8 +218,6 @@ namespace OmenSuperHub {
       Console.WriteLine($"SmartPowerControlEnabled={snapshot.SmartPowerControlEnabled}");
       Console.WriteLine($"AutoStart={snapshot.AutoStart}");
       Console.WriteLine($"OmenKey={snapshot.OmenKey}");
-      Console.WriteLine($"FloatingBar={snapshot.FloatingBar}");
-      Console.WriteLine($"FloatingBarLocation={snapshot.FloatingBarLocation}");
       return 0;
     }
 

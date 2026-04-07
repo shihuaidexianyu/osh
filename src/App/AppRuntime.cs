@@ -12,7 +12,6 @@ namespace OmenSuperHub {
     static readonly StartupTaskService startupTaskService = new StartupTaskService(processCommandService);
     static readonly HardwareControlService hardwareControlService = new HardwareControlService(hardwareGateway, processCommandService);
     static readonly AppSettingsService settingsService = new AppSettingsService();
-    static readonly SettingsRestoreService settingsRestoreService = new SettingsRestoreService(settingsService);
     static readonly AppErrorLogService errorLogService = new AppErrorLogService();
     static readonly FanCurveService fanCurveService = new FanCurveService(hardwareGateway, settingsService);
 
@@ -37,32 +36,15 @@ namespace OmenSuperHub {
     const int FanRawStep = 100;
     const int FanMaxRawLevel = FanMaxRpm / FanRawStep;
 
-    static string usageMode = "balanced";
     static string fanTable = "silent";
     static string fanMode = "performance";
     static string fanControl = "auto";
     static string tempSensitivity = "high";
     static string cpuPower = "max";
     static string gpuPower = "max";
-    static string autoStart = "off";
     static string omenKey = "default";
 
     static bool smartPowerControlEnabled = true;
-    static string smartPowerControlState = "balanced";
-    static string smartPowerControlReason = "stable";
-    static float controlCpuTemperatureC = 0f;
-    static float controlGpuTemperatureC = 0f;
-    static string controlCpuSensorName = "fallback";
-    static string controlGpuSensorName = "fallback";
-    static float controlCpuTempWallC = 88f;
-    static float controlGpuTempWallC = 79f;
-    static float controlThermalFeedback = 0f;
-    static float estimatedSystemPowerWatts = 0;
-    static float targetSystemPowerWatts = 0;
-    static int smartCpuLimitWatts = 0;
-    static string smartGpuTier = "max";
-    static bool smartFanBoostActive = false;
-
     static bool monitorGPU = true;
     static bool monitorFan = true;
     static bool powerOnline = true;
@@ -245,46 +227,6 @@ namespace OmenSuperHub {
       }
     }
 
-    static RuntimeControlSettings CreateCurrentControlSettings() {
-      return new RuntimeControlSettings {
-        FanMode = RuntimeControlSettings.ParseFanMode(fanMode),
-        FanControl = RuntimeControlSettings.ParseFanControl(fanControl, out int manualFanRpm),
-        ManualFanRpm = manualFanRpm,
-        FanTable = RuntimeControlSettings.ParseFanTable(fanTable),
-        TempSensitivity = RuntimeControlSettings.ParseTempSensitivity(tempSensitivity),
-        CpuPowerMax = RuntimeControlSettings.IsCpuPowerMax(cpuPower),
-        CpuPowerWatts = RuntimeControlSettings.ParseCpuPowerWatts(cpuPower),
-        GpuPower = RuntimeControlSettings.ParseGpuPower(gpuPower),
-        GpuClockLimitMhz = Math.Max(0, gpuClock),
-        SmartPowerControlEnabled = smartPowerControlEnabled
-      };
-    }
-
-    static string InferUsageModeFromCurrentSettings() {
-      RuntimeControlSettings current = CreateCurrentControlSettings();
-      if (current.FanControl == FanControlOption.Manual) {
-        return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
-      }
-
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Max))) {
-        return RuntimeControlSettings.ToStorageValue(UsageModePreset.Max);
-      }
-
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Quiet))) {
-        return RuntimeControlSettings.ToStorageValue(UsageModePreset.Quiet);
-      }
-
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Balanced))) {
-        return RuntimeControlSettings.ToStorageValue(UsageModePreset.Balanced);
-      }
-
-      if (current.Matches(RuntimeControlSettings.CreatePreset(UsageModePreset.Performance))) {
-        return RuntimeControlSettings.ToStorageValue(UsageModePreset.Performance);
-      }
-
-      return RuntimeControlSettings.ToStorageValue(UsageModePreset.Custom);
-    }
-
     static int GetManualCpuLimitWattsForController() {
       if (cpuPower == "max") {
         return 125;
@@ -309,17 +251,6 @@ namespace OmenSuperHub {
       }
     }
 
-    static string FormatGpuTierForDisplay(GpuPowerTier tier) {
-      switch (tier) {
-        case GpuPowerTier.Max:
-          return "max";
-        case GpuPowerTier.Med:
-          return "med";
-        default:
-          return "min";
-      }
-    }
-
     static void ApplySmartPowerControl() {
       if (!smartPowerControlEnabled || isShuttingDown) {
         return;
@@ -335,14 +266,8 @@ namespace OmenSuperHub {
           }
 
           List<TemperatureSensorReading> temperatureSensors = GetTemperatureSensorSnapshot();
-          string cpuSensorSource;
-          string gpuSensorSource;
-          float cpuControlTemp = hardwareTelemetryService.SelectControlTemperature(true, temperatureSensors, CPUTemp, out cpuSensorSource);
-          float gpuControlTemp = hardwareTelemetryService.SelectControlTemperature(false, temperatureSensors, GPUTemp, out gpuSensorSource);
-          controlCpuTemperatureC = cpuControlTemp;
-          controlGpuTemperatureC = gpuControlTemp;
-          controlCpuSensorName = cpuSensorSource;
-          controlGpuSensorName = gpuSensorSource;
+          float cpuControlTemp = hardwareTelemetryService.SelectControlTemperature(true, temperatureSensors, CPUTemp, out _);
+          float gpuControlTemp = hardwareTelemetryService.SelectControlTemperature(false, temperatureSensors, GPUTemp, out _);
 
           var input = new PowerControlInput {
             AcOnline = powerOnline,
@@ -362,17 +287,6 @@ namespace OmenSuperHub {
           };
 
           PowerControlDecision decision = powerController.Evaluate(input);
-          smartPowerControlState = decision.State;
-          smartPowerControlReason = decision.Reason;
-          controlCpuTempWallC = decision.CpuTempWallC;
-          controlGpuTempWallC = decision.GpuTempWallC;
-          controlThermalFeedback = decision.ThermalFeedback;
-          estimatedSystemPowerWatts = decision.EstimatedSystemPowerWatts;
-          targetSystemPowerWatts = decision.TargetSystemPowerWatts;
-          smartCpuLimitWatts = decision.CurrentCpuLimitWatts;
-          smartGpuTier = FormatGpuTierForDisplay(decision.CurrentGpuTier);
-          smartFanBoostActive = decision.FanBoostActive;
-
           if (decision.ApplyCpuLimit) {
             int cpuLimit = Math.Max(1, Math.Min(254, decision.CpuLimitWatts));
             hardwareControlService.SetCpuPowerLimit(cpuLimit);
@@ -449,77 +363,30 @@ namespace OmenSuperHub {
       fanCurveService.LoadConfig(profileName);
     }
 
-    static void SavePowerControlTuning() {
-      PowerControlTuning tuning;
-      lock (powerControlLock) {
-        tuning = powerController.GetTuningSnapshot();
-      }
-      settingsService.SavePowerControlTuning(tuning);
-    }
-
     static void LoadPowerControlTuning() {
       lock (powerControlLock) {
         powerController.UpdateTuning(settingsService.LoadPowerControlTuning());
       }
     }
 
-    static void SaveConfig() {
-      settingsService.SaveConfig(CreateSettingsSnapshot());
-    }
-
     static void RestoreConfig() {
-      if (!settingsRestoreService.TryLoadRestorePlan(out SettingsRestorePlan plan)) {
-        usageMode = RuntimeControlSettings.ToStorageValue(UsageModePreset.Balanced);
+      if (!settingsService.TryLoadConfig(out AppSettingsSnapshot snapshot)) {
         ApplyControlSettings(RuntimeControlSettings.CreatePreset(UsageModePreset.Balanced));
-        LoadPowerControlTuning();
-        return;
-      }
-
-      usageMode = plan.UsageMode;
-      ApplyControlSettings(plan.ControlSettings);
-      ApplyRestoredSettings(plan);
-
-      if (!smartPowerControlEnabled) {
-        ApplySmartPowerControlDisabledState();
-      }
-
-      usageMode = InferUsageModeFromCurrentSettings();
-    }
-
-    static void ApplyRestoredSettings(SettingsRestorePlan plan) {
-      if (plan == null) {
+        monitorFan = true;
+        ApplyOmenKey("default");
         return;
       }
 
       try {
-        ApplyAutoStart(plan.EnableAutoStart);
+        ApplyAutoStart(snapshot.AutoStart == "on");
       } catch (Exception ex) {
         errorLogService.Write(ex, "restore auto start");
       }
 
+      ApplyControlSettings(RuntimeControlSettings.FromSnapshot(snapshot));
       monitorGPU = true;
-      monitorFan = plan.MonitorFan;
-      ApplyOmenKey(plan.OmenKey);
-    }
-
-    static void ApplySmartPowerControlDisabledState() {
-      powerController.Reset();
-      smartPowerControlState = "manual";
-      smartPowerControlReason = "disabled";
-      smartFanBoostActive = false;
-    }
-
-    static AppSettingsSnapshot CreateSettingsSnapshot() {
-      var snapshot = new AppSettingsSnapshot {
-        UsageMode = usageMode,
-        AutoStart = autoStart,
-        OmenKey = omenKey,
-        MonitorFan = monitorFan,
-        SmartPowerControlEnabled = smartPowerControlEnabled
-      };
-
-      CreateCurrentControlSettings().ApplyToSnapshot(snapshot);
-      return snapshot;
+      monitorFan = snapshot.MonitorFan;
+      ApplyOmenKey(snapshot.OmenKey);
     }
 
     static void ApplyControlSettings(RuntimeControlSettings settings) {
@@ -604,10 +471,8 @@ namespace OmenSuperHub {
     static void ApplyAutoStart(bool enabled) {
       if (enabled) {
         startupTaskService.EnableAutoStart(AppDomain.CurrentDomain.BaseDirectory);
-        autoStart = "on";
       } else {
         startupTaskService.DisableAutoStart();
-        autoStart = "off";
       }
     }
 
@@ -629,13 +494,6 @@ namespace OmenSuperHub {
         if (fanControl == "auto") {
           hardwareControlService.SetMaxFanSpeedEnabled(false);
         }
-        smartPowerControlState = "manual";
-        smartPowerControlReason = "disabled";
-      }
-
-      if (enabled && smartPowerControlState == "manual" && smartPowerControlReason == "disabled") {
-        smartPowerControlState = "balanced";
-        smartPowerControlReason = "stable";
       }
     }
 
@@ -657,8 +515,6 @@ namespace OmenSuperHub {
       RuntimeControlSettings settings = RuntimeControlSettings.FromSnapshot(snapshot);
       ApplyControlSettings(settings);
       monitorFan = snapshot.MonitorFan;
-
-      usageMode = RuntimeControlSettings.ToStorageValue(RuntimeControlSettings.ParseUsageMode(snapshot.UsageMode));
       lastConfigWriteUtc = writeUtc;
     }
 

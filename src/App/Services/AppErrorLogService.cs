@@ -27,13 +27,5 @@ namespace OmenSuperHub {
       } catch {
       }
     }
-
-    public void ReportFatal(Exception ex, bool isShuttingDown) {
-      Write(ex);
-
-      if (!isShuttingDown) {
-        Console.WriteLine("An unexpected error occurred. Please check the log file for details.");
-      }
-    }
   }
 }

@@ -63,6 +63,8 @@ If a UI change only affects one of these concerns, keep the edit in that file.
   - Runtime snapshot projection and settings restore/save flows
 - `AppRuntime.Lifecycle.cs`
   - Startup, single-instance guard, pipe listener, shutdown, and fatal exception hooks
+- `AppRuntime.ControlLoop.cs`
+  - Hardware polling, fan control loop, power-event handling, and smart power control execution
 
 When changing runtime behavior, prefer editing the most specific partial file first.
 

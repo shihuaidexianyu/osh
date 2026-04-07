@@ -101,6 +101,7 @@
   <ItemGroup>
     <Compile Include="src\App\AppApplicationContext.cs" />
     <Compile Include="src\App\AppRuntime.ControlApply.cs" />
+    <Compile Include="src\App\AppRuntime.ControlLoop.cs" />
     <Compile Include="src\App\AppRuntime.Lifecycle.cs" />
     <Compile Include="src\App\AppRuntime.StatePersistence.cs" />
     <Compile Include="src\App\AppBackgroundScheduler.cs" />

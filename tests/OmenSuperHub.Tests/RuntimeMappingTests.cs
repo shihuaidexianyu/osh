@@ -72,41 +72,6 @@ namespace OmenSuperHub.Tests {
     }
 
     [TestMethod]
-    public void DashboardSnapshotBuilder_Build_ClonesCollectionsAndNestedModels() {
-      var builder = new DashboardSnapshotBuilder();
-      var state = new AppRuntimeState {
-        CpuTemperature = 81.5f,
-        GpuTemperature = 74.2f,
-        FanSpeeds = new List<int> { 23, 27 },
-        AutoStartEnabled = true,
-        OmenKeyMode = "custom",
-        TemperatureSensors = new List<TemperatureSensorReading> {
-          new TemperatureSensorReading { Name = "CPU Package", Celsius = 81.5f }
-        },
-        GpuStatus = new OmenGpuStatus {
-          CustomTgpEnabled = true,
-          RawData = new byte[] { 1, 2, 3 }
-        },
-        Battery = new BatteryTelemetry {
-          Discharging = true,
-          DischargeRateMilliwatts = 45200
-        }
-      };
-
-      DashboardSnapshot snapshot = builder.Build(state);
-      state.FanSpeeds[0] = 99;
-      state.TemperatureSensors[0].Celsius = 10f;
-      state.GpuStatus.RawData[0] = 9;
-
-      Assert.AreEqual(23, snapshot.FanSpeeds[0]);
-      Assert.IsTrue(snapshot.AutoStartEnabled);
-      Assert.AreEqual("custom", snapshot.OmenKeyMode);
-      Assert.AreEqual(81.5f, snapshot.TemperatureSensors[0].Celsius);
-      Assert.AreEqual(1, snapshot.GpuStatus.RawData[0]);
-      Assert.AreEqual(45.2f, HardwareTelemetryService.GetBatteryPowerWatts(snapshot.Battery));
-    }
-
-    [TestMethod]
     public void FanCurveService_LoadConfig_SavesProfileIntoSingleSettingsFile() {
       string tempDir = Path.Combine(Path.GetTempPath(), "OmenSuperHub.Tests", Path.GetRandomFileName());
       string configPath = Path.Combine(tempDir, "settings.json");

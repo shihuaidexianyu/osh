@@ -111,10 +111,8 @@
   <ItemGroup>
     <Compile Include="src\App\CliApp.cs" />
     <Compile Include="src\App\AppControlSettings.cs" />
-    <Compile Include="src\App\AppRuntimeState.cs" />
     <Compile Include="src\App\Services\ProcessCommandService.cs" />
     <Compile Include="src\App\Services\HardwareControlService.cs" />
-    <Compile Include="src\App\Services\DashboardSnapshotBuilder.cs" />
     <Compile Include="src\App\Services\AppSettingsService.cs" />
     <Compile Include="src\App\Services\AppErrorLogService.cs" />
     <Compile Include="src\App\Services\StartupTaskService.cs" />
@@ -125,7 +123,7 @@
     <Compile Include="src\Hardware\OmenHardwareGateway.cs" />
     <Compile Include="src\Core\Control\PowerController.cs" />
     <Compile Include="src\Hardware\OmenHardware.cs" />
-    <Compile Include="src\Core\Models\DashboardModels.cs" />
+    <Compile Include="src\Core\Models\TelemetryModels.cs" />
     <Compile Include="Properties\AssemblyVersion.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="src\App\Program.cs" />

@@ -85,10 +85,6 @@
       <HintPath>$(NuGetPackageRoot)system.numerics.vectors\4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="System.Resources.Extensions">
-      <HintPath>$(PkgSystem_Resources_Extensions)\lib\net461\System.Resources.Extensions.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
       <HintPath>$(NuGetPackageRoot)system.runtime.compilerservices.unsafe\6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
       <Private>True</Private>
@@ -102,7 +98,6 @@
     <PackageReference Include="Fody" Version="6.5.5" />
     <PackageReference Include="HidSharp" Version="2.1.0" GeneratePathProperty="true" />
     <PackageReference Include="TaskScheduler" Version="2.11.0" GeneratePathProperty="true" />
-    <PackageReference Include="System.Resources.Extensions" Version="4.7.1" GeneratePathProperty="true" />
     <PackageReference Include="System.Memory" Version="4.5.5" GeneratePathProperty="true" />
     <PackageReference Include="System.Buffers" Version="4.5.1" GeneratePathProperty="true" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" GeneratePathProperty="true" />
@@ -127,11 +122,6 @@
     <Compile Include="Properties\AssemblyVersion.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="src\App\Program.cs" />
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -143,24 +133,10 @@
     <None Include="Resources\fan.ico" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\nvpcf_cat.CAT" />
-    <EmbeddedResource Include="Resources\nvpcf_sys.sys" />
-    <None Include="Resources\smallfan.ico" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="LibreHardwareMonitor-pawnio-squashed\LibreHardwareMonitorLib\LibreHMLib_PawnIo.csproj">
       <Project>{3d996b14-d8d9-d7f6-b39b-46324df820f1}</Project>
       <Name>LibreHMLib_PawnIo</Name>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\nvpcf_inf.inf" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
